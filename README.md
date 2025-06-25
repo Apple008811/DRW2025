@@ -210,6 +210,35 @@ Key properties:
 
 For more details, see the [LightGBM documentation](https://lightgbm.readthedocs.io/en/latest/).
 
+### 6. Pearson Correlation Coefficient Theory
+
+The Pearson correlation coefficient (often denoted as **r**) is a statistical measure that quantifies the linear relationship between two continuous variables. In the context of this project, it is used to evaluate how well the model's predictions align with the actual market movements.
+
+#### Formula
+
+Given two variables, $X$ (true values) and $Y$ (predicted values), the Pearson correlation coefficient is calculated as:
+
+$$
+r = \frac{\sum_{i=1}^n (X_i - \bar{X})(Y_i - \bar{Y})}{\sqrt{\sum_{i=1}^n (X_i - \bar{X})^2} \sqrt{\sum_{i=1}^n (Y_i - \bar{Y})^2}}
+$$
+
+where:
+- $X_i$, $Y_i$ are the individual sample points
+- $\bar{X}$, $\bar{Y}$ are the means of $X$ and $Y$
+- $n$ is the number of samples
+
+#### Interpretation
+- **r = 1**: Perfect positive linear correlation (predictions increase exactly as true values increase)
+- **r = 0**: No linear correlation
+- **r = -1**: Perfect negative linear correlation (predictions decrease exactly as true values increase)
+
+#### Why Use Pearson Correlation for Evaluation?
+- **Scale-invariant**: Measures the strength of the relationship regardless of the scale of the variables.
+- **Sensitive to direction**: Captures whether predictions move in the same direction as the true values.
+- **Widely used in finance and time series**: Especially useful for evaluating models where the direction and relative magnitude of changes are more important than absolute values.
+
+In this project, a higher Pearson correlation indicates that the model's predictions more closely follow the actual market trends, making it a suitable metric for performance evaluation.
+
 ## Evaluation
 
 The primary evaluation metric is the Pearson correlation coefficient between predictions and actual values. This measures the linear correlation between the predicted and actual market movements.
