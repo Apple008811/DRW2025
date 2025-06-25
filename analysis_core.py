@@ -62,7 +62,7 @@ def load_and_prepare_data(train_file, test_file, submission_file, top_n=100):
             correlations.append((col, corr))
     else:
         # Direct calculation for small datasets
-        correlations = []
+    correlations = []
         for col in feature_cols:
             corr = abs(train_data[col].corr(train_data['label']))
             correlations.append((col, corr))

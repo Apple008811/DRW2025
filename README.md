@@ -195,6 +195,21 @@ python feature_exploration.py
 - Multiple prediction methods validation
 - Ensemble model validation
 
+### 5. LightGBM Regressor Theory
+
+LightGBM Regressor is an implementation of Gradient Boosting Decision Trees (GBDT) for regression tasks. The core idea is to build an ensemble of decision trees, where each new tree is trained to correct the errors (residuals) of the combined previous trees. The final prediction is the sum of the outputs from all trees:
+
+    ŷ = f₁(x) + f₂(x) + ... + f_M(x)
+
+where each fₘ(x) is a regression tree, and M is the total number of trees. At each iteration, the model fits a new tree to the negative gradient (residual) of the loss function (e.g., mean squared error) with respect to the current prediction. LightGBM optimizes this process with efficient histogram-based algorithms and leaf-wise tree growth, making it fast and scalable for large datasets.
+
+Key properties:
+- Each tree is trained to minimize the loss function by focusing on the errors of the previous ensemble.
+- The model uses a learning rate to control the contribution of each tree.
+- Feature importance can be extracted from the trained model to interpret which features are most influential.
+
+For more details, see the [LightGBM documentation](https://lightgbm.readthedocs.io/en/latest/).
+
 ## Evaluation
 
 The primary evaluation metric is the Pearson correlation coefficient between predictions and actual values. This measures the linear correlation between the predicted and actual market movements.
@@ -205,6 +220,12 @@ Current model performance metrics:
 - LightGBM: [Pearson correlation score]
 - Gaussian Process: [Pearson correlation score]
 - Ensemble: [Pearson correlation score]
+
+## Experiment Results
+
+| Date       | Mode  | Train Shape   | Test Shape    | Features | CV Score         | Output File                | Notes         |
+|------------|-------|--------------|--------------|----------|------------------|----------------------------|---------------|
+| 2024-06-23 | ultra | (525887,896) | (538150,896) | 13 (5 original + 8 lag) | - | ultra_quick_submission.csv | Baseline run, feature engineering completed |
 
 ## Contributing
 
