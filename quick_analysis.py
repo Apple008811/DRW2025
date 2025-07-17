@@ -78,8 +78,8 @@ def run_quick_with_sampling(sample_size=10000):
         train_data = pd.read_parquet(QUICK_CONFIG['train_file'])
         test_data = pd.read_parquet(QUICK_CONFIG['test_file'])
     else:
-    train_data = pd.read_csv(QUICK_CONFIG['train_file'])
-    test_data = pd.read_csv(QUICK_CONFIG['test_file'])
+        train_data = pd.read_csv(QUICK_CONFIG['train_file'])
+        test_data = pd.read_csv(QUICK_CONFIG['test_file'])
     
     submission_template = pd.read_csv(QUICK_CONFIG['submission_file'])
     
