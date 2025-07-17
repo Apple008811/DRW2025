@@ -24,7 +24,7 @@ This project follows a systematic, end-to-end approach to time series forecastin
 
 | Phase | Theoretical Focus | Practical Steps |
 |-------|-------------------|-----------------|
-| 1. Environment & Baseline | Environment setup, data loading, baseline model | - Install dependencies<br>- Load and validate data<br>- Run quick_test.py for baseline LightGBM model<br>- Generate quick_submission.csv and check Pearson correlation |
+| 1. Environment & Baseline | Environment setup, data loading, baseline model | - Install dependencies<br>- Load and validate data<br>- Run quick_test.py for baseline LightGBM model<br>- Generate ultra_quick_submission.csv and check Pearson correlation |
 | 2. Data Exploration & Feature Engineering | Exploratory Data Analysis (EDA), feature construction, feature selection | - Analyze data structure and distributions<br>- Visualize key features<br>- Engineer new features (technical indicators, rolling stats, lag features, time-based features)<br>- Select features using correlation, importance, and statistical tests |
 | 3. Model Training & Optimization | Comprehensive model testing: classical, ML, and hyperparameter tuning | - Train and compare the following models:<br> • ARIMA/SARIMA<br> • Prophet<br> • Linear Regression, Ridge, Lasso<br> • Random Forest<br> • XGBoost<br> • LightGBM<br> • Support Vector Regression (SVR)<br>- Use time series cross-validation<br>- Tune hyperparameters (e.g., LightGBM: num_leaves, learning_rate, feature_fraction)<br>- Compare model performance using Pearson correlation |
 | 4. Advanced Modeling & Ensembling | Deep learning, Bayesian methods, model ensembling | - Implement and test:<br> • LSTM, GRU, Transformer neural networks<br> • Gaussian Process (Bayesian approach)<br>- Ensemble models (stacking, blending, weighted averaging)<br>- Apply post-processing (calibration, outlier handling, smoothing) |
@@ -38,7 +38,7 @@ This project follows a systematic, end-to-end approach to time series forecastin
   - Install all required packages (see Setup section)
   - Load training, testing, and sample submission data
   - Run `python quick_test.py` to verify environment and generate a baseline LightGBM model
-  - Check that Pearson correlation > 0.1 and quick_submission.csv is created
+  - Check that Pearson correlation > 0.1 and ultra_quick_submission.csv is created
 
 #### Phase 2: Data Exploration & Feature Engineering
 - **Theory:** Understand data structure, identify patterns, and create informative features.
@@ -189,7 +189,7 @@ python quick_analysis.py help
 ```
 
 #### Output Files
-- `quick_submission.csv` - Basic quick analysis results
+- `ultra_quick_submission.csv` - Basic quick analysis results
 - `quick_sample_submission.csv` - Sampled analysis results
 
 #### When to Use
@@ -272,7 +272,7 @@ QUICK_CONFIG = {
     'n_estimators': 100,
     'learning_rate': 0.1,
     'max_depth': 6,
-    'output_file': 'quick_submission.csv'
+    'output_file': 'ultra_quick_submission.csv'
 }
 ```
 
