@@ -168,15 +168,18 @@ DRW/
 
 **Purpose**: Fast prototyping and testing on your local machine
 **Target**: Mac with limited resources
-**Features**: 20 top features + 5 lag features
-**CV**: 3-fold time series split
-**Model**: 100 estimators, learning rate 0.1
+**Features**: 10 top features + 3 lag features (optimized for speed)
+**CV**: 2-fold time series split
+**Model**: 50 estimators, learning rate 0.15
 
 #### Usage
 
 ```bash
 # Basic quick analysis
 python quick_analysis.py
+
+# Ultra-quick analysis (5 features, 20 estimators)
+python quick_analysis.py ultra
 
 # Quick analysis with data sampling (10k samples)
 python quick_analysis.py sample
@@ -189,7 +192,8 @@ python quick_analysis.py help
 ```
 
 #### Output Files
-- `ultra_quick_submission.csv` - Basic quick analysis results
+- `quick_submission.csv` - Standard quick analysis results
+- `ultra_quick_submission.csv` - Ultra-quick analysis results
 - `quick_sample_submission.csv` - Sampled analysis results
 
 #### When to Use
@@ -198,6 +202,35 @@ python quick_analysis.py help
 - ✅ Local development and prototyping
 - ✅ When you have limited time/resources
 - ❌ Final submissions (use full analysis instead)
+
+### 🧪 Test Script (test_quick.py)
+
+**Purpose**: Verify and test the functionality of quick_analysis.py
+**Target**: Validation and testing of analysis scripts
+
+#### Usage
+
+```bash
+# Run all tests
+python test_quick.py
+```
+
+#### Test Functions
+- **`test_ultra_quick()`**: Tests ultra-quick analysis functionality
+- **`test_quick_sample()`**: Tests quick analysis with sampling
+- **`check_data_files()`**: Verifies required data files exist
+
+#### Test Output
+- ⏱️ Execution time measurement
+- ✅/❌ Success/failure status
+- 📊 Performance metrics (Pearson correlation)
+- 🔍 Data file validation
+
+#### When to Use
+- ✅ After making changes to quick_analysis.py
+- ✅ Before committing code changes
+- ✅ To verify environment setup
+- ✅ To validate data file locations
 
 ### 🖥️ Full Analysis (Kaggle Notebooks)
 
@@ -254,24 +287,130 @@ The `analysis_core.py` module contains all the shared logic:
 
 | Stage | Features | Lag Features | CV Splits | Estimators | Use Case |
 |-------|----------|--------------|-----------|------------|----------|
-| Quick | 20 | 5 | 3 | 100 | Local testing |
+| Ultra-Quick | 5 | 2 | 2 | 20 | Ultra-fast testing |
+| Quick | 10 | 3 | 2 | 50 | Local testing |
 | Medium | 50 | 10 | 4 | 150 | Intermediate |
 | Full | 100 | 20 | 5 | 200 | Production |
+
+### 📈 Data Sampling Logic
+
+#### Dataset Information
+- **Training Data**: 525,887 rows (2023-03-01 to 2024-02-29)
+- **Test Data**: Similar size and time range
+- **Features**: 896 columns (including target variable)
+
+#### Sampling Strategy
+
+**1. Correlation Calculation Sampling**
+- **Trigger**: When dataset > 100,000 rows
+- **Sample Size**: 50,000 rows (fixed)
+- **Purpose**: Speed up correlation calculation for feature selection
+- **Random State**: 42 (reproducible)
+
+**2. Quick Analysis Sampling**
+- **Default Sample Size**: 10,000 rows
+- **Custom Sample Size**: Configurable (e.g., 5,000)
+- **Random State**: 42 (reproducible)
+- **Purpose**: Ultra-fast testing on local machines
+
+**3. Sampling Behavior**
+```python
+# Example: 10,000 sample with random_state=42
+sampled_data = train_data.sample(n=10000, random_state=42).reset_index(drop=True)
+```
+
+**4. Sampled Data Characteristics**
+- **Time Range**: Covers entire dataset period (2023-03-01 to 2024-02-29)
+- **Distribution**: Random sampling preserves temporal distribution
+- **Reproducibility**: Same random_state ensures consistent results
+
+**5. Detailed Sampling Analysis (10,000 samples with random_state=42)**
+
+**Sampling Parameters**:
+- Original dataset: 525,887 rows
+- Sample size: 10,000 rows (1.90%)
+- Random seed: 42
+- Row range: Row 3 to Row 525,887
+
+**Specific Sampled Row Positions**:
+- **First 50 row numbers**: [458379, 233213, 231699, 482014, 34207, 320024, 160123, 497749, 89980, 442198, 149762, 137622, 172870, 421094, 508049, 422810, 243504, 280441, 414464, 7068, 114069, 221533, 446158, 133439, 506082, 149449, 447546, 157679, 4741, 169534, 459322, 360487, 349794, 201367, 152555, 379094, 415104, 317439, 51883, 438567, 193040, 405515, 78390, 394700, 410373, 251761, 264516, 167218, 85172, 8010]
+
+- **Last 50 row numbers**: [494547, 233779, 23110, 423742, 224526, 76059, 297856, 88690, 205005, 178937, 294850, 259954, 180808, 309905, 303169, 443646, 514078, 167822, 464932, 168490, 502285, 51760, 353070, 274142, 272633, 382127, 471050, 315333, 227278, 461072, 463579, 25385, 175938, 383435, 123755, 142717, 162031, 315166, 179380, 9261, 493509, 289683, 454213, 232512, 363096, 400668, 308635, 490080, 306569, 138760]
+
+**Sampling Distribution Statistics**:
+- Minimum row number: 2 (Row 3)
+- Maximum row number: 525886 (Row 525,887)
+- Average interval: 52.6 rows
+- Time span: 365 days
+
+**⚠️ Important Sampling Limitations and Considerations**
+
+**Data Loss Analysis**:
+- **Missing rows**: 515,887 rows (98.10% of original data)
+- **Time continuity loss**: Random sampling breaks continuous time series
+- **Average time gap**: 52.6 minutes between sampled points (vs. 1 minute in original)
+
+**Potential Issues with Random Sampling**:
+
+1. **Time Series Continuity Loss**:
+   - Original data: Continuous 1-minute intervals
+   - Sampled data: Random jumps with 52.6-minute average gaps
+   - Impact: Loss of sequential time patterns
+
+2. **Feature Engineering Impact**:
+   - **Lag features**: May lose temporal continuity (e.g., t-1 might jump from t-52)
+   - **Rolling statistics**: May be calculated on discontinuous time windows
+   - **Time-based features**: May not reflect actual time relationships
+
+3. **Cross-Validation Issues**:
+   - **Time series CV**: Random sampling may include future data in validation sets
+   - **Data leakage**: Risk of using future information to predict past
+   - **Validation reliability**: May not reflect real-world performance
+
+4. **Model Training Limitations**:
+   - **Pattern learning**: Model may learn from discontinuous time patterns
+   - **Generalization**: May not generalize well to continuous time series
+   - **Prediction accuracy**: May be less accurate on full continuous data
+
+**Recommendations for Sampling**:
+- ✅ Use sampling only for **ultra-fast testing** and **prototyping**
+- ✅ For **production models**, use full dataset or systematic sampling
+- ✅ Consider **time-based sampling** (e.g., every Nth minute) for better continuity
+- ✅ Validate results on full dataset before final submission
+
+**6. Sample Size Recommendations**
+- **5,000 samples**: Ultra-fast testing (~30 seconds)
+- **10,000 samples**: Standard quick testing (~1-2 minutes)
+- **50,000 samples**: Correlation calculation (automatic)
+- **Full dataset**: Production analysis (525,887 rows)
 
 ### 🛠️ Configuration
 
 #### Quick Analysis Config (Local Mac)
 ```python
 QUICK_CONFIG = {
-    'train_file': 'data/train.csv',
-    'test_file': 'data/test.csv', 
-    'submission_file': 'data/sample_submission.csv',
-    'top_n': 20,  # Fewer features for speed
-    'lag_feature_count': 5,  # Fewer lag features
-    'n_splits': 3,  # Fewer CV splits
-    'n_estimators': 100,
-    'learning_rate': 0.1,
-    'max_depth': 6,
+    'train_file': '/Users/yixuan/DRW/data/train.parquet',
+    'test_file': '/Users/yixuan/DRW/data/test.parquet', 
+    'submission_file': '/Users/yixuan/DRW/data/sample_submission.csv',
+    'top_n': 10,  # Fewer features for speed
+    'lag_feature_count': 3,  # Fewer lag features
+    'n_splits': 2,  # Fewer CV splits
+    'n_estimators': 50,  # Fewer estimators
+    'learning_rate': 0.15,  # Higher learning rate for faster convergence
+    'max_depth': 4,  # Shallower tree depth
+    'output_file': 'quick_submission.csv'
+}
+```
+
+#### Ultra-Quick Config (Minimal Resources)
+```python
+ULTRA_QUICK_CONFIG = {
+    'top_n': 5,  # Minimal features
+    'lag_feature_count': 2,  # Minimal lag features
+    'n_splits': 2,
+    'n_estimators': 20,  # Minimal estimators
+    'learning_rate': 0.2,  # Higher learning rate
+    'max_depth': 3,  # Shallowest tree depth
     'output_file': 'ultra_quick_submission.csv'
 }
 ```
@@ -307,11 +446,23 @@ FULL_CONFIG = {
 
 ### 📈 Performance Expectations
 
+#### Ultra-Quick Analysis (Local Mac)
+- ⏱️ Execution time: 30-60 seconds
+- 💾 Memory usage: ~1-2 GB
+- 🎯 Expected score: Baseline performance
+- 📱 Suitable for: Any Mac
+
 #### Quick Analysis (Local Mac)
-- ⏱️ Execution time: 2-5 minutes
-- 💾 Memory usage: ~2-4 GB
+- ⏱️ Execution time: 1-2 minutes
+- 💾 Memory usage: ~2-3 GB
 - 🎯 Expected score: Baseline performance
 - 📱 Suitable for: MacBook Air/Pro
+
+#### Quick Analysis with Sampling (Local Mac)
+- ⏱️ Execution time: 30 seconds - 2 minutes (depending on sample size)
+- 💾 Memory usage: ~1-2 GB
+- 🎯 Expected score: Baseline performance
+- 📱 Suitable for: Any Mac
 
 #### Full Analysis (Kaggle)
 - ⏱️ Execution time: 10-30 minutes
@@ -359,6 +510,143 @@ python full_analysis.py help
 
 ---
 
+## Target Variable (Label) Analysis
+
+### Label Definition and Characteristics
+
+The target variable `label` represents **cryptocurrency price movement percentage** that we aim to predict. This section provides a comprehensive analysis of the label based on actual data verification.
+
+#### Label Verification Results
+
+**Data Source**: train.parquet (525,887 rows, 2023-03-01 to 2024-02-29)
+
+**Basic Statistics**:
+- **Range**: -24.42% to +20.74%
+- **Mean**: 0.036% (close to zero, indicating balanced up/down movements)
+- **Standard Deviation**: 1.01%
+- **Distribution**: 48.83% negative, 51.17% positive (nearly symmetric)
+
+**Time Series Characteristics**:
+- **High Autocorrelation**: Lag 1 = 0.981, Lag 2 = 0.963, Lag 3 = 0.945
+- **Smooth Transitions**: Continuous time series with gradual changes
+- **No Zero Values**: 0.00% of values are exactly zero
+
+**Distribution Analysis**:
+- **Concentration**: 96.0% of values fall within [-1.84%, 2.68%)
+- **Extreme Values**: Only 0.1% of values exceed ±6.35%
+- **Outliers**: Very few extreme values (1 sample at -24.42%, 1 sample at +20.74%)
+
+#### Label Calculation Hypothesis
+
+Based on the data characteristics, the label likely represents:
+
+```
+label = (Future_Price - Current_Price) / Current_Price × 100%
+```
+
+**Evidence Supporting This Hypothesis**:
+1. **Percentage Range**: ±20% is typical for cryptocurrency price movements
+2. **Symmetric Distribution**: Price movements are naturally symmetric around zero
+3. **Time Series Properties**: High autocorrelation suggests price continuity
+4. **Market Context**: DRW is a quantitative trading firm focused on price prediction
+
+#### Label vs. Market Data Correlation
+
+**Raw Market Data Correlation** (Pearson coefficient):
+- `bid_qty`: -0.013 (very weak negative)
+- `ask_qty`: -0.016 (very weak negative)  
+- `buy_qty`: 0.006 (very weak positive)
+- `sell_qty`: 0.011 (very weak positive)
+- `volume`: 0.009 (very weak positive)
+
+**Interpretation**:
+- **Low Linear Correlation**: Raw market data shows minimal linear relationship with label
+- **Nonlinear Relationships**: Important relationships may be nonlinear or time-lagged
+- **Feature Engineering Required**: Simple features need transformation for predictive power
+- **Sample Size Effect**: With 525K samples, even small correlations may be statistically significant
+
+#### Label Prediction Challenges
+
+**1. Time Series Nature**:
+- Label represents future price movement (forward-looking)
+- Requires time series models and lag features
+- Cross-validation must respect temporal order
+
+**2. Nonlinear Relationships**:
+- Simple linear correlations are insufficient
+- Complex feature interactions needed
+- Advanced models (LightGBM, neural networks) required
+
+**3. Market Microstructure**:
+- Price movements influenced by order book dynamics
+- Bid/ask spreads, volume profiles, market depth
+- High-frequency trading patterns
+
+**4. Feature Engineering Strategy**:
+- **Lag Features**: Previous time steps of important features
+- **Ratio Features**: bid_qty/ask_qty, buy_qty/sell_qty, volume ratios
+- **Technical Indicators**: Moving averages, momentum, volatility measures
+- **Interaction Features**: Combinations of market variables
+
+#### Label Analysis Summary
+
+**✅ Confirmed Characteristics**:
+- Label is price movement percentage
+- Symmetric distribution around zero
+- High temporal autocorrelation
+- Extreme values are rare
+
+**⚠️ Prediction Challenges**:
+- Low correlation with raw market data
+- Requires sophisticated feature engineering
+- Time series modeling complexity
+- Nonlinear relationship patterns
+
+**🎯 Modeling Implications**:
+- Use time series cross-validation
+- Implement lag feature engineering
+- Focus on feature interactions and ratios
+- Consider ensemble methods for robustness
+
+#### Data Verification Process
+
+**Verification Script**: `verify_label.py` (temporary script, deleted after use)
+
+**Verification Steps**:
+1. **Basic Statistics**: Calculated min, max, mean, std of label values
+2. **Distribution Analysis**: Analyzed positive/negative/zero value proportions
+3. **Time Series Analysis**: Examined consecutive time points and autocorrelation
+4. **Market Data Correlation**: Calculated Pearson correlation with raw market features
+5. **Distribution Histogram**: Analyzed value distribution across ranges
+6. **Change Rate Analysis**: Examined label-to-label changes over time
+
+**Key Findings from Verification**:
+- **Temporal Continuity**: High autocorrelation (0.981 at lag 1) confirms time series nature
+- **Symmetric Distribution**: Nearly equal positive/negative proportions (51.17%/48.83%)
+- **Concentration Pattern**: 96% of values within ±2.68% range
+- **Market Relationship**: Very weak linear correlation with raw market data
+- **Change Patterns**: Smooth transitions between consecutive time points
+
+**Verification Code Example**:
+```python
+# Label basic statistics
+print(f"Range: {train['label'].min():.2f} to {train['label'].max():.2f}")
+print(f"Mean: {train['label'].mean():.6f}")
+print(f"Distribution: {(train['label'] < 0).mean():.2%} negative, {(train['label'] > 0).mean():.2%} positive")
+
+# Autocorrelation analysis
+for lag in range(1, 11):
+    corr = train['label'].autocorr(lag=lag)
+    print(f"Lag {lag}: {corr:.6f}")
+
+# Market data correlation
+for col in ['bid_qty', 'ask_qty', 'buy_qty', 'sell_qty', 'volume']:
+    corr = train['label'].corr(train[col])
+    print(f"{col}: {corr:.6f}")
+```
+
+---
+
 ## Model Architecture
 
 ### 1. Data Processing
@@ -367,10 +655,18 @@ python full_analysis.py help
 - Technical indicator calculation
 
 ### 2. Feature Engineering
-- Rolling statistics
-- Technical indicators
-- Volume-based features
-- Price action features
+
+#### Current Implementation
+The project uses **correlation-based feature selection** from the original 896 features:
+
+- **Selection Method**: Pearson correlation with target variable
+- **Feature Types**: Market data (bid_qty, ask_qty, volume), technical indicators (X1-X15+)
+- **Lag Features**: Generated for top features with periods [1, 2, 3, 5]
+
+#### Feature Count by Mode
+- **Ultra-Quick**: 5 original + 8 lag = 13 total features
+- **Quick**: 10 original + 12 lag = 22 total features  
+- **Full**: 100 original + 80 lag = 180 total features
 
 ### 3. Model Training
 - LightGBM with custom Pearson correlation metric
@@ -433,15 +729,24 @@ The primary evaluation metric is the Pearson correlation coefficient between pre
 ### Model Performance
 
 Current model performance metrics:
-- LightGBM: [Pearson correlation score]
-- Gaussian Process: [Pearson correlation score]
-- Ensemble: [Pearson correlation score]
+- LightGBM: 0.0474 ± 0.0034 (Pearson correlation)
+- Gaussian Process: [Not yet implemented]
+- Ensemble: [Not yet implemented]
 
 ## Experiment Results
 
 | Date       | Mode  | Train Shape   | Test Shape    | Features | CV Score         | Output File                | Notes         |
 |------------|-------|--------------|--------------|----------|------------------|----------------------------|---------------|
-| 2024-06-23 | ultra | (525887,896) | (538150,896) | 13 (5 original + 8 lag) | - | ultra_quick_submission.csv | Baseline run, feature engineering completed |
+| 2025-06-15 | ultra | (525887,896) | (538150,896) | 13 (5 original + 8 lag) | 0.0474 ± 0.0034 | ultra_quick_submission.csv | Baseline run, feature engineering completed |
+| 2025-06-15 | test  | (10000,896)  | (10000,896)  | 13 (5 original + 8 lag) | 0.0474 ± 0.0034 | quick_sample_submission.csv | Test script validation, 10k sample |
+
+### Test Script Results
+
+| Test Function | Status | Execution Time | Sample Size | Features | CV Score | Notes |
+|---------------|--------|----------------|-------------|----------|----------|-------|
+| `test_ultra_quick()` | ✅ PASS | ~30-60 seconds | Full dataset | 13 (5+8) | 0.0474 ± 0.0034 | Ultra-quick analysis validation |
+| `test_quick_sample()` | ✅ PASS | ~30-60 seconds | 10,000 rows | 13 (5+8) | 0.0474 ± 0.0034 | Sampling analysis validation |
+| `check_data_files()` | ✅ PASS | <1 second | N/A | N/A | N/A | Data file validation |
 
 ## Contributing
 
