@@ -722,6 +722,74 @@ where:
 
 In this project, a higher Pearson correlation indicates that the model's predictions more closely follow the actual market trends, making it a suitable metric for performance evaluation.
 
+### 7. Cross-Validation Score (CV Score) Theory
+
+**CV Score** stands for **Cross-Validation Score**, which is the average performance metric across all folds in k-fold cross-validation.
+
+#### CV Score Formula
+
+For k-fold cross-validation, the CV Score is calculated as:
+
+$$\text{CV Score} = \frac{1}{k} \sum_{i=1}^{k} r_i$$
+
+where:
+- $k$ = number of folds (in our project, $k = 2$)
+- $r_i$ = Pearson correlation coefficient for fold $i$
+
+#### CV Score Standard Deviation
+
+The standard deviation of CV Score measures the stability of model performance:
+
+$$\text{CV Std} = \sqrt{\frac{1}{k-1} \sum_{i=1}^{k} (r_i - \text{CV Score})^2}$$
+
+#### Time Series Cross-Validation Implementation
+
+In our project, we use **2-fold time series cross-validation**:
+
+```
+Data: [t₁, t₂, t₃, ..., tₙ]
+
+Fold 1: Train [t₁, t₂, ..., t_{n/2}] → Validate [t_{n/2+1}, ..., tₙ]
+Fold 2: Train [t₁, t₂, ..., t_{n-1}] → Validate [tₙ]
+```
+
+**CV Score Calculation**:
+$$\text{CV Score} = \frac{r_1 + r_2}{2}$$
+
+where:
+- $r_1$ = Pearson correlation for Fold 1
+- $r_2$ = Pearson correlation for Fold 2
+
+#### Project CV Score Results
+
+**Current Performance**:
+- **CV Score**: 0.0474 ± 0.0034
+- **Interpretation**: Average Pearson correlation of 4.74% across 2 folds
+- **Stability**: Standard deviation of 0.34% indicates consistent performance
+
+**Correlation Strength Classification**:
+- $|r| < 0.1$: Very weak correlation
+- $0.1 \leq |r| < 0.3$: Weak correlation
+- $0.3 \leq |r| < 0.5$: Moderate correlation
+- $0.5 \leq |r| < 0.7$: Strong correlation
+- $|r| \geq 0.7$: Very strong correlation
+
+**Our Result (0.0474)**: Very weak correlation, indicating significant room for improvement.
+
+#### Why Use CV Score?
+
+1. **Model Selection**: Compare different models and hyperparameters
+2. **Overfitting Detection**: Ensure model generalizes well
+3. **Performance Estimation**: Estimate how well model will perform on unseen data
+4. **Development Guidance**: Guide feature engineering and model improvements
+
+#### CV Score vs Competition Score
+
+- **CV Score**: Internal development metric (our estimate)
+- **Competition Score**: Official evaluation by competition organizers
+- **Relationship**: CV Score ≈ Competition Score (in ideal cases)
+- **Strategy**: Use CV Score for development, but don't over-optimize
+
 ## Evaluation
 
 The primary evaluation metric is the Pearson correlation coefficient between predictions and actual values. This measures the linear correlation between the predicted and actual market movements.
