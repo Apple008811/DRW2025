@@ -18,6 +18,58 @@ The goal is to predict cryptocurrency market movements using historical market d
 
 ---
 
+## Experiment Results
+
+### Phase 1: Ultra-Quick Test Results
+
+| Date       | Mode  | Train Shape   | Test Shape    | Features | CV Score         | Output File                | Notes         |
+|------------|-------|--------------|--------------|----------|------------------|----------------------------|---------------|
+| 2025-06-15 | ultra | (525887,896) | (538150,896) | 13 (5 original + 8 lag) | 0.0474 ± 0.0034 | ultra_quick_submission.csv | Baseline run, feature engineering completed |
+| 2025-06-15 | test  | (10000,896)  | (10000,896)  | 13 (5 original + 8 lag) | 0.0474 ± 0.0034 | quick_sample_submission.csv | Test script validation, 10k sample |
+
+### Phase 2: Data Exploration & Analysis Results
+
+| Date       | Analysis Type | Data Size | Key Findings | Output Files | Notes |
+|------------|---------------|-----------|--------------|--------------|-------|
+| 2025-07-20 | Complete EDA | 525,887 rows × 896 cols | • Label distribution: concentrated near 0<br>• Market data correlations: very weak (0.005-0.01)<br>• Technical indicators: 890 features, most with low correlation<br>• Label autocorrelation: very strong (0.97 at lag 1, 0.71 at lag 20) | phase2_analysis_charts.png<br>phase2_results.json | Full dataset analysis, comprehensive insights for feature engineering |
+
+#### Phase 2 Key Insights
+
+**Label Analysis**:
+- **Distribution**: Highly concentrated near 0, symmetric distribution
+- **Range**: Most values between -5 and 5
+- **Autocorrelation**: Very strong time dependency (0.97 at lag 1, 0.71 at lag 20)
+
+**Market Data Analysis**:
+- **Volume Features**: bid_qty, ask_qty, buy_qty, sell_qty, volume
+- **Correlations**: All very weak (0.005 to 0.01 absolute correlation)
+- **Derived Features**: bid_ask_ratio, buy_sell_ratio, volume_intensity show potential
+
+**Technical Indicators Analysis**:
+- **Total Count**: 890 technical indicators (X1-X890)
+- **Correlation Distribution**: 
+  - High correlation (|corr| > 0.1): ~5-10% of features
+  - Medium correlation (0.05 < |corr| ≤ 0.1): ~15-20% of features
+  - Low correlation (|corr| ≤ 0.05): ~70-80% of features
+- **Feature Selection**: Need to focus on high-correlation indicators
+
+**Feature Engineering Strategy**:
+1. **Lag Features**: Critical importance based on strong autocorrelation
+2. **Market Imbalance Features**: bid_ask_ratio, buy_sell_ratio, volume_intensity
+3. **Technical Indicator Selection**: Focus on top 100-200 high-correlation features
+4. **Time-based Features**: Cyclical encoding of time components
+5. **Interaction Features**: Ratios and combinations of market data
+
+### Test Script Results
+
+| Test Function | Status | Execution Time | Sample Size | Features | CV Score | Notes |
+|---------------|--------|----------------|-------------|----------|----------|-------|
+| `test_ultra_quick()` | ✅ PASS | ~30-60 seconds | Full dataset | 13 (5+8) | 0.0474 ± 0.0034 | Ultra-quick analysis validation |
+| `test_quick_sample()` | ✅ PASS | ~30-60 seconds | 10,000 rows | 13 (5+8) | 0.0474 ± 0.0034 | Sampling analysis validation |
+| `check_data_files()` | ✅ PASS | <1 second | N/A | N/A | N/A | Data file validation |
+
+---
+
 ## Methodology & Execution Plan
 
 This project follows a systematic, end-to-end approach to time series forecasting, combining both theoretical methodology and practical execution. Each phase below includes both the conceptual focus and the concrete steps to implement it, with all required models and methods explicitly listed.
@@ -800,21 +852,6 @@ Current model performance metrics:
 - LightGBM: 0.0474 ± 0.0034 (Pearson correlation)
 - Gaussian Process: [Not yet implemented]
 - Ensemble: [Not yet implemented]
-
-## Experiment Results
-
-| Date       | Mode  | Train Shape   | Test Shape    | Features | CV Score         | Output File                | Notes         |
-|------------|-------|--------------|--------------|----------|------------------|----------------------------|---------------|
-| 2025-06-15 | ultra | (525887,896) | (538150,896) | 13 (5 original + 8 lag) | 0.0474 ± 0.0034 | ultra_quick_submission.csv | Baseline run, feature engineering completed |
-| 2025-06-15 | test  | (10000,896)  | (10000,896)  | 13 (5 original + 8 lag) | 0.0474 ± 0.0034 | quick_sample_submission.csv | Test script validation, 10k sample |
-
-### Test Script Results
-
-| Test Function | Status | Execution Time | Sample Size | Features | CV Score | Notes |
-|---------------|--------|----------------|-------------|----------|----------|-------|
-| `test_ultra_quick()` | ✅ PASS | ~30-60 seconds | Full dataset | 13 (5+8) | 0.0474 ± 0.0034 | Ultra-quick analysis validation |
-| `test_quick_sample()` | ✅ PASS | ~30-60 seconds | 10,000 rows | 13 (5+8) | 0.0474 ± 0.0034 | Sampling analysis validation |
-| `check_data_files()` | ✅ PASS | <1 second | N/A | N/A | N/A | Data file validation |
 
 ## Contributing
 
