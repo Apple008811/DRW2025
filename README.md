@@ -20,6 +20,31 @@ The goal is to predict cryptocurrency market movements using historical market d
 
 ## Experiment Results
 
+### Model Prediction Data Statistics
+
+| Model | Mean | Std | Min | Max | Range | Training Time | Test Correlation | Status |
+|-------|------|-----|-----|-----|-------|---------------|------------------|--------|
+| **LightGBM** | -0.000828 | 0.504797 | -2.274801 | 2.380469 | 4.655270 | ~5-10 min | ~0.42 | ✅ Completed |
+| **XGBoost** | 0.000286 | 0.486328 | -2.136424 | 2.279565 | 4.415988 | ~5-10 min | ~0.42 | ✅ Completed |
+| **Random Forest** | -0.000373 | 0.453784 | -2.252822 | 2.071551 | 4.324373 | ~11 min | 0.4198 | ✅ Completed |
+| Linear Regression | - | - | - | - | - | ~5-10 min | - | ⏳ Pending |
+| Ridge Regression | - | - | - | - | - | ~5-10 min | - | ⏳ Pending |
+| Lasso Regression | - | - | - | - | - | ~5-10 min | - | ⏳ Pending |
+| ARIMA | - | - | - | - | - | ~10-30 min | - | ⏳ Pending |
+| Prophet | - | - | - | - | - | ~10-30 min | - | ⏳ Pending |
+| SARIMA | - | - | - | - | - | ~10-30 min | - | ⏳ Pending |
+| SVR | - | - | - | - | - | ~10-20 min | - | ⏳ Pending |
+| LSTM | - | - | - | - | - | ~30-60 min | - | ⏳ Pending |
+| GRU | - | - | - | - | - | ~30-60 min | - | ⏳ Pending |
+| Transformer | - | - | - | - | - | ~30-60 min | - | ⏳ Pending |
+| Gaussian Process | - | - | - | - | - | ~20-40 min | - | ⏳ Pending |
+
+**Key Observations:**
+- **LightGBM**: Largest prediction range, most symmetric distribution, fastest training
+- **XGBoost**: Similar performance to LightGBM, slightly positive bias
+- **Random Forest**: Most conservative predictions, smallest range, slowest training
+- **Best Submission Candidate**: LightGBM (largest range suitable for volatile crypto market)
+
 ### Phase 1: Ultra-Quick Test Results
 
 | Date       | Mode  | Train Shape   | Test Shape    | Features | CV Score         | Output File                | Notes         |
@@ -90,12 +115,12 @@ This project follows a systematic, end-to-end approach to time series forecastin
 
 **1. Linear Models (Fast & Lightweight)**
 ```bash
-python lightweight_models.py
+python linear_models_training.py
 ```
 - **Models**: Linear Regression, Ridge, Lasso
 - **Time**: 5-10 minutes
 - **Memory**: Low usage
-- **Output**: `/kaggle/working/results/lightweight_*_results.csv`
+- **Output**: `/kaggle/working/results/linear_models_results.csv`
 
 **2. Tree Models (Individual Training)**
 ```bash
@@ -104,59 +129,101 @@ python lightgbm_training.py
 
 # XGBoost  
 python xgboost_training.py
+
+# Random Forest
+python random_forest_training.py
 ```
-- **Time**: 5-10 minutes each
+- **Time**: 5-15 minutes each
 - **Memory**: Medium usage
-- **Output**: `/kaggle/working/results/lightgbm_results.csv`, `/kaggle/working/results/xgboost_results.csv`
+- **Output**: `/kaggle/working/results/lightgbm_results.csv`, `/kaggle/working/results/xgboost_results.csv`, `/kaggle/working/results/random_forest_results.csv`
 
 **3. Time Series Models**
 ```bash
+# ARIMA and Prophet
+python time_series_models_training.py
+
 # SARIMA (standalone)
 python sarima_training.py
 ```
 - **Time**: 10-30 minutes
 - **Memory**: Medium usage
-- **Output**: `/kaggle/working/results/sarima_results.csv`
+- **Output**: `/kaggle/working/results/time_series_models_results.csv`, `/kaggle/working/results/sarima_results.csv`
 
-**4. Other Models (Selective Training)**
+**4. Support Vector Regression**
 ```bash
-python individual_model_training.py
+python svr_training.py
 ```
-- **Models**: SVR, Random Forest, ARIMA, Prophet
-- **Features**: Interactive menu, step-by-step training
-- **Memory**: Optimized for Kaggle environment
+- **Models**: SVR with RBF kernel
+- **Time**: 10-20 minutes
+- **Memory**: Medium usage
+- **Output**: `/kaggle/working/results/svr_results.csv`
 
 #### **Phase 4: Advanced Models**
+
+**1. Neural Networks (Deep Learning)**
 ```bash
-python phase4_advanced_modeling_kaggle.py
+python neural_networks_training.py
 ```
-- **Models**: LSTM, GRU, Gaussian Process Regression
+- **Models**: LSTM, GRU, Transformer
 - **Time**: 30-60 minutes
 - **Memory**: High usage
+- **Output**: `/kaggle/working/results/neural_networks_results.csv`
+
+**2. Gaussian Process Regression**
+```bash
+python gaussian_process_training.py
+```
+- **Models**: Gaussian Process with multiple kernels (RBF, Matern, RationalQuadratic)
+- **Time**: 20-40 minutes
+- **Memory**: High usage
+- **Output**: `/kaggle/working/results/gaussian_process_results.csv`
 
 ### Training Strategy
 
-1. **Start with Linear Models** (`lightweight_models.py`)
+1. **Start with Linear Models** (`linear_models_training.py`)
    - Quick baseline results
    - Low memory usage
    - Fast validation
 
-2. **Continue with Tree Models** (`lightgbm_training.py`, `xgboost_training.py`)
+2. **Continue with Tree Models** (`lightgbm_training.py`, `xgboost_training.py`, `random_forest_training.py`)
    - Better performance expected
    - Moderate memory usage
    - Individual training to avoid conflicts
 
-3. **Advanced Models** (if needed)
-   - Use `individual_model_training.py` for selective training
-   - Or run `phase4_advanced_modeling_kaggle.py` for all advanced models
+3. **Time Series Models** (`time_series_models_training.py`, `sarima_training.py`)
+   - Classical time series approaches
+   - Good for capturing temporal patterns
+   - Moderate computational cost
+
+4. **Support Vector Regression** (`svr_training.py`)
+   - Non-linear modeling capability
+   - Moderate memory usage
+   - Good for complex patterns
+
+5. **Advanced Models** (if needed)
+   - **Neural Networks** (`neural_networks_training.py`): LSTM, GRU, Transformer
+   - **Gaussian Process** (`gaussian_process_training.py`): Bayesian approach
+   - High computational cost, run individually
 
 ### Results Location
 All results are saved in `/kaggle/working/results/` with the following format:
-- `lightweight_*_results.csv` - Linear models results
+
+**Phase 3 Models:**
+- `linear_models_results.csv` - Linear Regression, Ridge, Lasso results
 - `lightgbm_results.csv` - LightGBM results  
 - `xgboost_results.csv` - XGBoost results
+- `random_forest_results.csv` - Random Forest results
+- `time_series_models_results.csv` - ARIMA, Prophet results
 - `sarima_results.csv` - SARIMA results
-- `*_results.csv` - Other model results
+- `svr_results.csv` - Support Vector Regression results
+
+**Phase 4 Models:**
+- `neural_networks_results.csv` - LSTM, GRU, Transformer results
+- `gaussian_process_results.csv` - Gaussian Process Regression results
+
+**Submission Files:**
+- `*_submission.csv` - Individual model submission files
+- `ensemble_submission.csv` - Ensemble model submission
 
 ### Phase Details
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-LightGBM Training Script
-Standalone LightGBM model training
+Random Forest Training Script
+Standalone Random Forest model training
 """
 
 import pandas as pd
@@ -12,13 +12,13 @@ import gc
 import os
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from scipy.stats import pearsonr
-import lightgbm as lgb
+from sklearn.ensemble import RandomForestRegressor
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-class LightGBMTrainer:
+class RandomForestTrainer:
     def __init__(self, data_path=None):
         # Try different possible data paths
         if data_path is None:
@@ -181,7 +181,6 @@ class LightGBMTrainer:
         # Check if this is raw data (no target column)
         if target_col not in df.columns:
             print(f"Target column '{target_col}' not found in raw data")
-            print("Available columns:", list(df.columns)[:10], "...")
             
             # Try to find target column with different names
             possible_targets = ['target', 'Target', 'TARGET', 'y', 'Y', 'label', 'Label']
@@ -199,14 +198,10 @@ class LightGBMTrainer:
                 print("You need to run Phase 3 (Feature Engineering) first to create target column.")
                 return None, None, None
         
-        # Sample data if specified
+        # Apply sample size if specified
         if sample_size and sample_size < len(df):
-            df = df.sample(n=sample_size, random_state=42)
-            print(f"Sampled {len(df)} rows")
-        
-        # Sort by time if available
-        if 'time_id' in df.columns:
-            df = df.sort_values('time_id')
+            df = df.sample(n=sample_size, random_state=42).reset_index(drop=True)
+            print(f"Sampled {sample_size} rows for training")
         
         # Separate features and target
         feature_cols = [col for col in df.columns if col not in [target_col, 'time_id']]
@@ -214,7 +209,6 @@ class LightGBMTrainer:
         y = df[target_col].values
         
         print(f"Features: {X.shape[1]}, Target range: {y.min():.4f} to {y.max():.4f}")
-        
         return X, y, feature_cols
     
     def evaluate_model(self, y_true, y_pred, model_name):
@@ -222,27 +216,24 @@ class LightGBMTrainer:
         mae = mean_absolute_error(y_true, y_pred)
         mse = mean_squared_error(y_true, y_pred)
         r2 = r2_score(y_true, y_pred)
-        corr, _ = pearsonr(y_true, y_pred)
+        correlation, _ = pearsonr(y_true, y_pred)
         
-        result = {
-            'model': model_name,
+        print(f"{model_name}:")
+        print(f"  MAE: {mae:.4f}")
+        print(f"  MSE: {mse:.4f}")
+        print(f"  R²:  {r2:.4f}")
+        print(f"  Correlation: {correlation:.4f}")
+        
+        return {
             'mae': mae,
             'mse': mse,
             'r2': r2,
-            'correlation': corr
+            'correlation': correlation
         }
-        
-        print(f"{model_name} Results:")
-        print(f"  MAE: {mae:.4f}")
-        print(f"  MSE: {mse:.4f}")
-        print(f"  R²: {r2:.4f}")
-        print(f"  Correlation: {corr:.4f}")
-        
-        return result
     
-    def train_lightgbm(self, X, y, feature_cols):
-        """Train LightGBM"""
-        print("Training LightGBM...")
+    def train_random_forest(self, X, y, feature_cols):
+        """Train Random Forest"""
+        print("Training Random Forest...")
         start_time = time.time()
         
         # Use first 80% for training
@@ -251,12 +242,13 @@ class LightGBMTrainer:
         y_train, y_test = y[:train_size], y[train_size:]
         
         # Train model
-        model = lgb.LGBMRegressor(
+        model = RandomForestRegressor(
             n_estimators=100,
-            learning_rate=0.1,
-            max_depth=8,      # Limited depth
+            max_depth=10,      # Limited depth to avoid overfitting
+            min_samples_split=5,
+            min_samples_leaf=2,
             random_state=42,
-            verbose=-1
+            n_jobs=-1
         )
         model.fit(X_train, y_train)
         
@@ -265,11 +257,11 @@ class LightGBMTrainer:
         test_pred = model.predict(X_test)
         
         training_time = time.time() - start_time
-        print(f"LightGBM training completed in {training_time:.2f} seconds")
+        print(f"Random Forest training completed in {training_time:.2f} seconds")
         
         # Evaluate
-        train_result = self.evaluate_model(y_train, train_pred, "LightGBM (Train)")
-        test_result = self.evaluate_model(y_test, test_pred, "LightGBM (Test)")
+        train_result = self.evaluate_model(y_train, train_pred, "Random Forest (Train)")
+        test_result = self.evaluate_model(y_test, test_pred, "Random Forest (Test)")
         
         # Generate submission file
         self.generate_submission(model, X, feature_cols)
@@ -299,7 +291,7 @@ class LightGBMTrainer:
                 'training_time': result['training_time']
             }])
             
-            filename = f'/kaggle/working/results/lightgbm_results.csv'
+            filename = f'/kaggle/working/results/random_forest_results.csv'
             df.to_csv(filename, index=False)
             print(f"Results saved to {filename}")
             
@@ -344,7 +336,6 @@ class LightGBMTrainer:
                 print(f"✅ Using first {required_rows} predictions from {len(predictions)} available")
             
             # Create submission DataFrame with correct ID format
-            # Kaggle expects specific ID values including 538150
             # Generate IDs from 1 to 538150 (inclusive)
             submission_ids = list(range(1, required_rows + 1))
             
@@ -354,7 +345,7 @@ class LightGBMTrainer:
             })
             
             # Save submission file
-            submission_path = '/kaggle/working/lightgbm_submission.csv'
+            submission_path = '/kaggle/working/random_forest_submission.csv'
             submission_df.to_csv(submission_path, index=False)
             print(f"✅ Submission file saved to: {submission_path}")
             print(f"   Predictions: {len(submission_df)} rows")
@@ -368,7 +359,7 @@ class LightGBMTrainer:
     def run(self):
         """Main run function"""
         print("=" * 60)
-        print("LIGHTGBM TRAINING")
+        print("RANDOM FOREST TRAINING")
         print("=" * 60)
         
         # Load data
@@ -377,29 +368,26 @@ class LightGBMTrainer:
             return
         
         # Prepare data (use smaller sample to avoid memory issues)
-        sample_size = min(40000, len(df))  # Use 40k samples for LightGBM
+        sample_size = min(35000, len(df))  # Use 35k samples for Random Forest
         X, y, feature_cols = self.prepare_data(df, sample_size=sample_size)
         if X is None:
             return
         
-        # Store original data indices for submission file
-        self.original_data_indices = df.index[:sample_size].tolist()
-        
         print(f"\n{'='*50}")
-        print(f"TRAINING LIGHTGBM")
+        print(f"TRAINING RANDOM FOREST")
         print(f"{'='*50}")
-        print(f"Estimated time: 5-10 minutes")
+        print(f"Estimated time: 3-8 minutes")
         print(f"Starting training...")
         
         try:
-            result = self.train_lightgbm(X, y, feature_cols)
+            result = self.train_random_forest(X, y, feature_cols)
             
             if result:
-                self.save_results(result, "LightGBM")
-                print(f"✅ LightGBM completed successfully")
+                self.save_results(result, "Random Forest")
+                print(f"✅ Random Forest completed successfully")
                 
                 # Show detailed results immediately
-                print(f"\n📊 LightGBM RESULTS:")
+                print(f"\n📊 Random Forest RESULTS:")
                 print(f"{'='*40}")
                 
                 train_result = result['train']
@@ -425,18 +413,18 @@ class LightGBMTrainer:
                 
                 print(f"{'='*40}")
                 
-                print(f"\n✅ LightGBM training completed successfully!")
-                print(f"📁 Results saved in /kaggle/working/results/lightgbm_results.csv")
-                print(f"📄 Submission file: /kaggle/working/lightgbm_submission.csv")
+                print(f"\n✅ Random Forest training completed successfully!")
+                print(f"📁 Results saved in /kaggle/working/results/random_forest_results.csv")
+                print(f"📄 Submission file: /kaggle/working/random_forest_submission.csv")
             else:
-                print(f"❌ LightGBM failed")
+                print(f"❌ Random Forest failed")
                 
         except Exception as e:
-            print(f"❌ LightGBM failed with error: {e}")
+            print(f"❌ Random Forest failed with error: {e}")
 
 def main():
     """Main function"""
-    trainer = LightGBMTrainer()
+    trainer = RandomForestTrainer()
     trainer.run()
 
 if __name__ == "__main__":
