@@ -5,8 +5,8 @@ Phase 2: Data Exploration & Feature Engineering (Kaggle Version)
 
 Complete data exploration for Kaggle environment with full dataset.
 
-Author: AI Assistant
-Date: 2025-01-19
+Author: Yixuan
+Date: 2025-07-20
 """
 
 import pandas as pd

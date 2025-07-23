@@ -78,9 +78,85 @@ This project follows a systematic, end-to-end approach to time series forecastin
 |-------|-------------------|-----------------|
 | 1. Environment & Baseline | Environment setup, data loading, baseline model | - Install dependencies<br>- Load and validate data<br>- Run quick_test.py for baseline LightGBM model<br>- Generate ultra_quick_submission.csv and check Pearson correlation |
 | 2. Data Exploration & Feature Engineering | Exploratory Data Analysis (EDA), feature construction, feature selection | - Analyze data structure and distributions<br>- Visualize key features<br>- Engineer new features (technical indicators, rolling stats, lag features, time-based features)<br>- Select features using correlation, importance, and statistical tests |
-| 3. Model Training & Optimization | Comprehensive model testing: classical, ML, and hyperparameter tuning | - Train and compare the following models:<br> • ARIMA/SARIMA<br> • Prophet<br> • Linear Regression, Ridge, Lasso<br> • Random Forest<br> • XGBoost<br> • LightGBM<br> • Support Vector Regression (SVR)<br>- Use time series cross-validation<br>- Tune hyperparameters (e.g., LightGBM: num_leaves, learning_rate, feature_fraction)<br>- Compare model performance using Pearson correlation |
-| 4. Advanced Modeling & Ensembling | Deep learning, Bayesian methods, model ensembling | - Implement and test:<br> • LSTM, GRU, Transformer neural networks<br> • Gaussian Process (Bayesian approach)<br>- Ensemble models (stacking, blending, weighted averaging)<br>- Apply post-processing (calibration, outlier handling, smoothing) |
+| 3. Model Training & Optimization | Comprehensive model testing: classical, ML, and hyperparameter tuning | **Phase 3 (Basic Models):**<br>• **Linear Models**: Linear, Ridge, Lasso<br>  - Script: `lightweight_models.py` (5-10 minutes)<br>• **Tree Models**: LightGBM, XGBoost<br>  - Script: `lightgbm_training.py` (5-10 minutes)<br>  - Script: `xgboost_training.py` (5-10 minutes)<br>• **Time Series Models**: ARIMA, SARIMA, Prophet<br>  - Script: `sarima_training.py` (10-30 minutes)<br>• **Other Models**: SVR, Random Forest<br>  - Script: `individual_model_training.py` (可选择性训练)<br>• **Hyperparameter Tuning**: LightGBM optimization<br>• **Model Ensemble**: Weighted averaging |
+| 4. Advanced Modeling & Ensembling | Deep learning, Bayesian methods, model ensembling | **Phase 4 (Advanced Models):**<br>• Deep Learning: LSTM, GRU<br>• Bayesian Methods: Gaussian Process Regression<br>• Advanced Ensembles: Stacking, Voting<br>• Post-processing: Outlier handling, Smoothing, Calibration<br><br>**Files:**<br>• `phase4_model_training_kaggle.py` - Phase 3 implementation (basic models)<br>• `phase4_advanced_modeling_kaggle.py` - Phase 4 implementation (advanced models) |
 | 5. Validation & Submission | Final validation, result analysis, submission preparation | - Perform cross-validation and stability checks<br>- Analyze prediction distributions, errors, and feature importance<br>- Prepare and verify submission files<br>- Backup results |
+
+## Script Usage Guide
+
+### Model Training Scripts
+
+#### **Phase 3: Basic Models Training**
+
+**1. Linear Models (Fast & Lightweight)**
+```bash
+python lightweight_models.py
+```
+- **Models**: Linear Regression, Ridge, Lasso
+- **Time**: 5-10 minutes
+- **Memory**: Low usage
+- **Output**: `/kaggle/working/results/lightweight_*_results.csv`
+
+**2. Tree Models (Individual Training)**
+```bash
+# LightGBM
+python lightgbm_training.py
+
+# XGBoost  
+python xgboost_training.py
+```
+- **Time**: 5-10 minutes each
+- **Memory**: Medium usage
+- **Output**: `/kaggle/working/results/lightgbm_results.csv`, `/kaggle/working/results/xgboost_results.csv`
+
+**3. Time Series Models**
+```bash
+# SARIMA (standalone)
+python sarima_training.py
+```
+- **Time**: 10-30 minutes
+- **Memory**: Medium usage
+- **Output**: `/kaggle/working/results/sarima_results.csv`
+
+**4. Other Models (Selective Training)**
+```bash
+python individual_model_training.py
+```
+- **Models**: SVR, Random Forest, ARIMA, Prophet
+- **Features**: Interactive menu, step-by-step training
+- **Memory**: Optimized for Kaggle environment
+
+#### **Phase 4: Advanced Models**
+```bash
+python phase4_advanced_modeling_kaggle.py
+```
+- **Models**: LSTM, GRU, Gaussian Process Regression
+- **Time**: 30-60 minutes
+- **Memory**: High usage
+
+### Training Strategy
+
+1. **Start with Linear Models** (`lightweight_models.py`)
+   - Quick baseline results
+   - Low memory usage
+   - Fast validation
+
+2. **Continue with Tree Models** (`lightgbm_training.py`, `xgboost_training.py`)
+   - Better performance expected
+   - Moderate memory usage
+   - Individual training to avoid conflicts
+
+3. **Advanced Models** (if needed)
+   - Use `individual_model_training.py` for selective training
+   - Or run `phase4_advanced_modeling_kaggle.py` for all advanced models
+
+### Results Location
+All results are saved in `/kaggle/working/results/` with the following format:
+- `lightweight_*_results.csv` - Linear models results
+- `lightgbm_results.csv` - LightGBM results  
+- `xgboost_results.csv` - XGBoost results
+- `sarima_results.csv` - SARIMA results
+- `*_results.csv` - Other model results
 
 ### Phase Details
 

@@ -11,9 +11,9 @@ from analysis_core import run_analysis_stage
 
 # Configuration for quick analysis (optimized for local Mac)
 QUICK_CONFIG = {
-    'train_file': '/Users/yixuan/DRW/data/train.parquet',
-    'test_file': '/Users/yixuan/DRW/data/test.parquet', 
-    'submission_file': '/Users/yixuan/DRW/data/sample_submission.csv',
+    'train_file': '/Users/yixuan/DRW 2/data/train.parquet',
+    'test_file': '/Users/yixuan/DRW 2/data/test.parquet', 
+    'submission_file': '/Users/yixuan/DRW 2/data/sample_submission.csv',
     'top_n': 10,  # Fewer features for speed, reduced from 20 to 10
     'lag_feature_count': 3,  # Fewer lag features, reduced from 5 to 3
     'n_splits': 2,  # Fewer CV splits, reduced from 3 to 2
