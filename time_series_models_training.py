@@ -224,29 +224,32 @@ class TimeSeriesModelsTrainer:
         """Create submission file for Kaggle."""
         print(f"\nCreating submission file for {model_name}...")
         
-        # Create submission dataframe
+        # Ensure correct number of rows (538,150)
+        expected_rows = 538150
+        if len(predictions) != expected_rows:
+            print(f"WARNING: Expected {expected_rows} rows, got {len(predictions)}")
+            if len(predictions) < expected_rows:
+                # Pad with last prediction
+                predictions = list(predictions) + [predictions[-1]] * (expected_rows - len(predictions))
+            else:
+                # Truncate
+                predictions = predictions[:expected_rows]
+        
+        # Create submission dataframe with correct format (like LightGBM)
+        submission_ids = list(range(1, expected_rows + 1))
         submission = pd.DataFrame({
+            'id': submission_ids,
             'prediction': predictions
         })
         
-        # Ensure correct number of rows (538,150)
-        expected_rows = 538150
-        if len(submission) != expected_rows:
-            print(f"WARNING: Expected {expected_rows} rows, got {len(submission)}")
-            if len(submission) < expected_rows:
-                # Pad with last prediction
-                padding = pd.DataFrame({
-                    'prediction': [predictions[-1]] * (expected_rows - len(submission))
-                })
-                submission = pd.concat([submission, padding], ignore_index=True)
-            else:
-                # Truncate
-                submission = submission.head(expected_rows)
-        
-        # Save submission file
-        filename = f'/kaggle/working/results/{model_name.lower()}_submission.csv'
+        # Save submission file (same path as LightGBM)
+        filename = f'/kaggle/working/{model_name.lower()}_submission.csv'
         submission.to_csv(filename, index=False)
         print(f"SUCCESS: Submission file saved: {filename}")
+        print(f"   Predictions: {len(submission)} rows")
+        print(f"   Prediction range: {min(predictions):.4f} to {max(predictions):.4f}")
+        print(f"   Prediction mean: {np.mean(predictions):.4f}")
+        print(f"   Prediction std: {np.std(predictions):.4f}")
         
         return filename
         

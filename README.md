@@ -27,23 +27,35 @@ The goal is to predict cryptocurrency market movements using historical market d
 | **LightGBM** | -0.000828 | 0.504797 | -2.274801 | 2.380469 | 4.655270 | ~5-10 min | ~0.42 | ✅ Completed |
 | **XGBoost** | 0.000286 | 0.486328 | -2.136424 | 2.279565 | 4.415988 | ~5-10 min | ~0.42 | ✅ Completed |
 | **Random Forest** | -0.000373 | 0.453784 | -2.252822 | 2.071551 | 4.324373 | ~11 min | 0.4198 | ✅ Completed |
-| Linear Regression | - | - | - | - | - | ~5-10 min | - | ⏳ Pending |
-| Ridge Regression | - | - | - | - | - | ~5-10 min | - | ⏳ Pending |
-| Lasso Regression | - | - | - | - | - | ~5-10 min | - | ⏳ Pending |
-| ARIMA | - | - | - | - | - | ~10-30 min | - | ⏳ Pending |
-| Prophet | - | - | - | - | - | ~10-30 min | - | ⏳ Pending |
+| Linear Regression | - | - | - | - | - | ~5-10 min | - | ❌ Kernel Crash |
+| Ridge Regression | - | - | - | - | - | ~5-10 min | - | ❌ Kernel Crash |
+| Lasso Regression | - | - | - | - | - | ~5-10 min | - | ❌ Kernel Crash |
+| ARIMA | 0.000000 | 0.037300 | -0.111900 | 0.111900 | 0.223800 | ~10-30 min | 0.0373 | ✅ Completed |
+| Prophet | - | - | - | - | - | ~10-30 min | - | ❌ Kernel Crash |
 | SARIMA | - | - | - | - | - | ~10-30 min | - | ⏳ Pending |
-| SVR | - | - | - | - | - | ~10-20 min | - | ⏳ Pending |
-| LSTM | - | - | - | - | - | ~30-60 min | - | ⏳ Pending |
-| GRU | - | - | - | - | - | ~30-60 min | - | ⏳ Pending |
-| Transformer | - | - | - | - | - | ~30-60 min | - | ⏳ Pending |
+| SVR | - | - | - | - | - | ~10-20 min | - | ❌ Kernel Crash |
+| LSTM | - | - | - | - | - | ~30-60 min | - | 🔄 Lightweight Version |
+| GRU | - | - | - | - | - | ~30-60 min | - | 🔄 Lightweight Version |
+| Transformer | - | - | - | - | - | ~30-60 min | - | 🔄 Lightweight Version |
 | Gaussian Process | - | - | - | - | - | ~20-40 min | - | ⏳ Pending |
 
 **Key Observations:**
 - **LightGBM**: Largest prediction range, most symmetric distribution, fastest training
 - **XGBoost**: Similar performance to LightGBM, slightly positive bias
 - **Random Forest**: Most conservative predictions, smallest range, slowest training
+- **ARIMA**: Time series model completed successfully with score 0.0373
 - **Best Submission Candidate**: LightGBM (largest range suitable for volatile crypto market)
+
+### Current Status Summary
+**✅ Successfully Completed (4 models)**: LightGBM, XGBoost, Random Forest, ARIMA
+**❌ Failed Due to Memory Issues (3 models)**: Linear Models, SVR, Prophet  
+**🔄 Available for Next Steps**: 
+- Lightweight Neural Network (memory-optimized)
+- Gaussian Process Regression
+- Enhanced Ensemble Methods (4-model combination)
+- SARIMA (lighter time series model)
+
+**Recommendation**: Focus on ensemble optimization with existing 4 models and try lightweight neural network for additional diversity.
 
 ### Phase 1: Ultra-Quick Test Results
 
