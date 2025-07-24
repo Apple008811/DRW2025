@@ -52,7 +52,7 @@ def load_and_prepare_data(train_file, test_file, submission_file, top_n=100):
     # For large datasets, use more efficient correlation calculation
     if len(train_data) > 100000:
         # Sample for correlation calculation to improve speed
-        sample_size = min(50000, len(train_data)) #只要数据行数大于10万，不管 quick 还是 full，都会采样5万行算相关性。
+        sample_size = min(50000, len(train_data)) # For datasets larger than 100k rows, sample 50k rows for correlation calculation regardless of quick or full mode.
         sample_data = train_data.sample(n=sample_size, random_state=42)
         print(f"   Using {sample_size} samples for correlation calculation...")
         
@@ -100,7 +100,7 @@ def engineer_features(X_train, X_test, top_features, lag_feature_count, lag_peri
     # Select features for lag calculation
     lag_features = top_features[:lag_feature_count]
     
-    # Calculate lag features, 特征工程必须对 train 和 test 同步进行，保证特征结构一致，模型才能正常训练和预测。
+    # Calculate lag features - Feature engineering must be applied to train and test data simultaneously to ensure consistent feature structure for proper model training and prediction.
     for feat in lag_features:
         for lag in lag_periods:
             X_train[f'{feat}_lag_{lag}'] = X_train[feat].shift(lag)

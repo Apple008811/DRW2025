@@ -1,328 +1,273 @@
 #!/usr/bin/env python3
 """
-Gaussian Process Regression Training Script
-==========================================
-
-Trains and evaluates Gaussian Process Regression model for cryptocurrency market prediction.
-
-Author: Yixuan
-Date: 2025-01-22
+Gaussian Process Training - Ultra Lightweight Version for Kaggle
+Optimized for memory constraints and kernel stability
 """
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy.stats import pearsonr
-import warnings
-warnings.filterwarnings('ignore')
-
-# Memory optimization
 import gc
 import os
+from datetime import datetime
+import pytz
+
+# Disable GPU and set memory limits
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# Gaussian Process
+# Check if Gaussian Process is available
 try:
     from sklearn.gaussian_process import GaussianProcessRegressor
-    from sklearn.gaussian_process.kernels import RBF, Matern, RationalQuadratic
+    from sklearn.gaussian_process.kernels import RBF, Matern
     GP_AVAILABLE = True
 except ImportError:
-    print("WARNING: sklearn.gaussian_process not available, skipping GP model")
     GP_AVAILABLE = False
+    print("WARNING: sklearn.gaussian_process not available")
 
-# Set style for better plots
-plt.style.use('seaborn-v0_8')
-sns.set_palette("husl")
-
-class GaussianProcessTrainer:
+class UltraLightGaussianProcess:
     def __init__(self):
-        """Initialize Gaussian Process training."""
-        self.train = None
-        self.test = None
-        self.train_features = None
-        self.test_features = None
-        
-        # Model results storage
-        self.models = {}
-        self.results = {}
-        
-        # File paths
-        self.train_file = '/kaggle/input/drw-crypto-market-prediction/train.parquet'
-        self.test_file = '/kaggle/input/drw-crypto-market-prediction/test.parquet'
-        self.features_file = '/kaggle/working/engineered_features.parquet'
-        
-        # Create results directory
-        os.makedirs('/kaggle/working/results', exist_ok=True)
+        self.model = None
+        self.scaler = None
+        self.feature_selector = None
         
     def load_data(self):
-        """Load data and engineered features."""
-        print("Loading data and engineered features...")
+        """Load data with memory optimization."""
+        print("Loading data...")
         
-        # Load original data
-        self.train = pd.read_parquet(self.train_file)
-        self.test = pd.read_parquet(self.test_file)
+        # Load train data and check structure
+        train_data = pd.read_parquet('/kaggle/input/drw-crypto-market-prediction/train.parquet')
+        print(f"Train data shape: {train_data.shape}")
+        print(f"Train columns: {len(train_data.columns)} columns")
+        print(f"Sample columns: {list(train_data.columns[:5])}...")
         
-        # Load engineered features (from Phase 3)
-        try:
-            features_data = pd.read_parquet(self.features_file)
-            self.train_features = features_data[features_data.index < len(self.train)]
-            self.test_features = features_data[features_data.index >= len(self.train)]
-            print(f"SUCCESS: Engineered features loaded: {self.train_features.shape}")
-        except:
-            print("WARNING: Engineered features not found, using original features")
-            self.train_features = self.train.drop(['label'], axis=1, errors='ignore')
-            self.test_features = self.test.copy()
+        # Check if 'id' column exists, if not create it
+        if 'id' not in train_data.columns:
+            train_data['id'] = range(len(train_data))
+            print("Created 'id' column for train data")
         
-        print(f"SUCCESS: Train data: {self.train.shape}")
-        print(f"SUCCESS: Test data: {self.test.shape}")
+        # Check if 'timestamp' column exists, if not create it
+        if 'timestamp' not in train_data.columns:
+            train_data['timestamp'] = range(len(train_data))
+            print("Created 'timestamp' column for train data")
         
-    def prepare_data(self):
-        """Prepare data for training."""
-        print("\n" + "="*80)
-        print("DATA PREPARATION")
-        print("="*80)
+        # Load test data
+        test_data = pd.read_parquet('/kaggle/input/drw-crypto-market-prediction/test.parquet')
+        print(f"Test data shape: {test_data.shape}")
+        print(f"Test columns: {len(test_data.columns)} columns")
+        print(f"Sample columns: {list(test_data.columns[:5])}...")
         
-        # Get target variable
-        self.y_train = self.train['label']
+        # Check if 'id' column exists in test data
+        if 'id' not in test_data.columns:
+            test_data['id'] = range(len(test_data))
+            print("Created 'id' column for test data")
         
-        # Prepare feature columns
-        feature_cols = [col for col in self.train_features.columns if col != 'label']
-        self.X_train = self.train_features[feature_cols]
-        self.X_test = self.test_features[feature_cols]
+        # Check if 'timestamp' column exists in test data
+        if 'timestamp' not in test_data.columns:
+            test_data['timestamp'] = range(len(test_data))
+            print("Created 'timestamp' column for test data")
         
-        # Handle missing values
-        self.X_train = self.X_train.fillna(0)
-        self.X_test = self.X_test.fillna(0)
-        
-        # Remove infinite values
-        self.X_train = self.X_train.replace([np.inf, -np.inf], 0)
-        self.X_test = self.X_test.replace([np.inf, -np.inf], 0)
-        
-        print(f"SUCCESS: Training features: {self.X_train.shape}")
-        print(f"SUCCESS: Test features: {self.X_test.shape}")
-        print(f"SUCCESS: Target variable: {self.y_train.shape}")
-        
-        # Memory optimization
         gc.collect()
         
-    def time_series_cv(self, model, X, y, n_splits=3):
-        """Perform time series cross-validation."""
-        from sklearn.model_selection import TimeSeriesSplit
-        tscv = TimeSeriesSplit(n_splits=n_splits)
-        scores = []
+        print(f"Train data: {len(train_data)} rows")
+        print(f"Test data: {len(test_data)} rows")
         
-        for train_idx, val_idx in tscv.split(X):
-            X_train_fold = X.iloc[train_idx]
-            y_train_fold = y.iloc[train_idx]
-            X_val_fold = X.iloc[val_idx]
-            y_val_fold = y.iloc[val_idx]
-            
-            # Fit model
-            model.fit(X_train_fold, y_train_fold)
-            
-            # Predict
-            y_pred = model.predict(X_val_fold)
-            
-            # Calculate correlation
-            score = pearsonr(y_val_fold, y_pred)[0]
-            scores.append(score)
-            
-        return np.mean(scores), np.std(scores), scores
+        return train_data, test_data
+    
+    def create_simple_features(self, df, is_train=True):
+        """Create very simple features to minimize memory usage."""
+        print("Creating simple features...")
         
-    def train_gaussian_process(self, X, y, feature_cols):
-        """Train Gaussian Process Regression model."""
+        # Basic time features
+        df['hour'] = df['timestamp'] % 24
+        df['day_of_week'] = (df['timestamp'] // 24) % 7
+        
+        if is_train:
+            # For training data, use 'label' column if it exists
+            if 'label' in df.columns:
+                # Simple lag features (only 1 lag to save memory)
+                df['label_lag1'] = df['label'].shift(1)
+                df['label_lag1'].fillna(0, inplace=True)
+                
+                # Simple rolling mean (small window)
+                df['label_rolling_mean'] = df['label'].rolling(window=5, min_periods=1).mean()
+            else:
+                # If no label column, use first feature column as proxy
+                feature_cols = [col for col in df.columns if col.startswith('X')]
+                if feature_cols:
+                    proxy_col = feature_cols[0]
+                    df['label_lag1'] = df[proxy_col].shift(1)
+                    df['label_lag1'].fillna(0, inplace=True)
+                    df['label_rolling_mean'] = df[proxy_col].rolling(window=5, min_periods=1).mean()
+                else:
+                    # Fallback: use zeros
+                    df['label_lag1'] = 0
+                    df['label_rolling_mean'] = 0
+        else:
+            # For test data, use zeros for lag features
+            df['label_lag1'] = 0
+            df['label_rolling_mean'] = 0
+        
+        # Fill NaN values
+        df.fillna(0, inplace=True)
+        
+        return df
+    
+    def train(self):
+        """Train ultra-lightweight Gaussian Process model."""
         if not GP_AVAILABLE:
-            print("SKIPPED: Gaussian Process model (sklearn.gaussian_process not available)")
+            print("ERROR: Gaussian Process not available")
             return None
             
-        print("\nTraining Gaussian Process Regression...")
+        print("Starting ultra-lightweight Gaussian Process training...")
         
         try:
-            # Use a subset for computational efficiency (GP is expensive)
-            sample_size = min(5000, len(X))
-            sample_idx = np.random.choice(len(X), sample_size, replace=False)
+            # Load data
+            train_data, test_data = self.load_data()
             
-            X_sample = X.iloc[sample_idx]
-            y_sample = y.iloc[sample_idx]
+            # Create simple features
+            train_data = self.create_simple_features(train_data, is_train=True)
+            test_data = self.create_simple_features(test_data, is_train=False)
+            
+            # Select only a few simple features
+            feature_cols = ['hour', 'day_of_week', 'label_lag1', 'label_rolling_mean']
+            
+            # Get target variable
+            if 'label' in train_data.columns:
+                target_col = 'label'
+            else:
+                # Use first feature column as target
+                feature_cols_available = [col for col in train_data.columns if col.startswith('X')]
+                if feature_cols_available:
+                    target_col = feature_cols_available[0]
+                    print(f"Using {target_col} as target variable")
+                else:
+                    print("ERROR: No suitable target variable found")
+                    return None
+            
+            # Use very small sample for training
+            sample_size = min(1000, len(train_data))  # Ultra small sample
+            sample_idx = np.random.choice(len(train_data), sample_size, replace=False)
+            
+            X_train = train_data.iloc[sample_idx][feature_cols]
+            y_train = train_data.iloc[sample_idx][target_col]
+            
+            X_test = test_data[feature_cols]
+            
+            print(f"Training on {len(X_train)} samples with {len(feature_cols)} features")
             
             # Standardize features
             from sklearn.preprocessing import StandardScaler
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X_sample)
-            X_test_scaled = scaler.transform(self.X_test)
+            self.scaler = StandardScaler()
+            X_train_scaled = self.scaler.fit_transform(X_train)
+            X_test_scaled = self.scaler.transform(X_test)
             
-            # Try different kernels
-            kernels = [
-                RBF(length_scale=1.0),
-                Matern(length_scale=1.0, nu=1.5),
-                RationalQuadratic(length_scale=1.0, alpha=1.0)
-            ]
-            
-            best_score = -1
-            best_model = None
-            best_kernel = None
-            
-            for i, kernel in enumerate(kernels):
-                print(f"  Testing kernel {i+1}/{len(kernels)}: {type(kernel).__name__}")
-                
-                model = GaussianProcessRegressor(
-                    kernel=kernel,
-                    alpha=1e-6,
-                    random_state=42,
-                    n_restarts_optimizer=5
-                )
-                
-                # Simple validation (GP is too slow for full CV)
-                split_idx = int(len(X_scaled) * 0.8)
-                X_train_gp = X_scaled[:split_idx]
-                y_train_gp = y_sample.iloc[:split_idx]
-                X_val_gp = X_scaled[split_idx:]
-                y_val_gp = y_sample.iloc[split_idx:]
-                
-                # Fit model
-                model.fit(X_train_gp, y_train_gp)
-                
-                # Predict validation set
-                y_pred = model.predict(X_val_gp)
-                score = pearsonr(y_val_gp, y_pred)[0]
-                
-                print(f"    Score: {score:.4f}")
-                
-                if score > best_score:
-                    best_score = score
-                    best_model = model
-                    best_kernel = kernel
-            
-            print(f"  Best kernel: {type(best_kernel).__name__} with score: {best_score:.4f}")
-            
-            # Train final model with best kernel on full sample
-            final_model = GaussianProcessRegressor(
-                kernel=best_kernel,
-                alpha=1e-6,
+            # Train simple Gaussian Process with minimal parameters
+            self.model = GaussianProcessRegressor(
+                kernel=RBF(length_scale=1.0),
+                alpha=1e-3,  # Increased alpha for stability
                 random_state=42,
-                n_restarts_optimizer=5
+                n_restarts_optimizer=1,  # Minimal restarts
+                normalize_y=True
             )
-            final_model.fit(X_scaled, y_sample)
             
-            # Predict test set
-            predictions = final_model.predict(X_test_scaled)
+            print("Fitting model...")
+            self.model.fit(X_train_scaled, y_train)
             
-            # Store results
-            self.models['Gaussian Process'] = {'model': final_model, 'scaler': scaler}
-            self.results['Gaussian Process'] = {
-                'avg_score': best_score,
-                'std_score': 0.0,
-                'scores': [best_score],
-                'predictions': predictions
-            }
+            # Predict
+            print("Making predictions...")
+            predictions = self.model.predict(X_test_scaled)
             
-            print(f"SUCCESS: Gaussian Process: {best_score:.4f}")
+            # Clean up memory
+            del X_train, y_train, X_train_scaled, X_test_scaled
+            gc.collect()
+            
+            print(f"SUCCESS: Gaussian Process trained on {sample_size} samples")
+            print(f"Predictions: {len(predictions)}")
+            print(f"Mean prediction: {np.mean(predictions):.6f}")
+            
             return predictions
             
         except Exception as e:
-            print(f"ERROR: Gaussian Process training failed: {e}")
+            print(f"ERROR: Training failed: {e}")
             return None
+    
+    def create_submission(self, predictions):
+        """Create submission file."""
+        if predictions is None:
+            print("ERROR: No predictions to create submission")
+            return
+            
+        print("Creating submission file...")
         
-    def create_submission_file(self, predictions, model_name):
-        """Create submission file for Kaggle."""
-        print(f"\nCreating submission file for {model_name}...")
+        # Create submission dataframe with correct format
+        expected_rows = 538150
         
-        # Create submission dataframe
+        # Ensure we have the correct number of predictions
+        if len(predictions) != expected_rows:
+            print(f"WARNING: Expected {expected_rows} predictions, got {len(predictions)}")
+            if len(predictions) < expected_rows:
+                # Pad with last prediction value
+                padding = [predictions[-1]] * (expected_rows - len(predictions))
+                predictions = np.concatenate([predictions, padding])
+            else:
+                # Truncate to expected length
+                predictions = predictions[:expected_rows]
+        
         submission = pd.DataFrame({
+            'id': range(1, expected_rows + 1),  # IDs from 1 to 538150
             'prediction': predictions
         })
         
-        # Ensure correct number of rows (538,150)
-        expected_rows = 538150
-        if len(submission) != expected_rows:
-            print(f"WARNING: Expected {expected_rows} rows, got {len(submission)}")
-            if len(submission) < expected_rows:
-                # Pad with last prediction
-                padding = pd.DataFrame({
-                    'prediction': [predictions[-1]] * (expected_rows - len(submission))
-                })
-                submission = pd.concat([submission, padding], ignore_index=True)
-            else:
-                # Truncate
-                submission = submission.head(expected_rows)
+        # Save to Kaggle working directory
+        output_path = '/kaggle/working/gaussian_process_submission.csv'
+        submission.to_csv(output_path, index=False)
         
-        # Save submission file
-        filename = f'/kaggle/working/results/{model_name.lower().replace(" ", "_")}_submission.csv'
-        submission.to_csv(filename, index=False)
-        print(f"SUCCESS: Submission file saved: {filename}")
+        print(f"✅ Submission saved: {output_path}")
+        print(f"📊 Submission stats:")
+        print(f"   Rows: {len(submission)} (expected: {expected_rows})")
+        print(f"   ID range: {submission['id'].min()} to {submission['id'].max()}")
+        print(f"   Mean: {submission['prediction'].mean():.6f}")
+        print(f"   Std: {submission['prediction'].std():.6f}")
+        print(f"   Min: {submission['prediction'].min():.6f}")
+        print(f"   Max: {submission['prediction'].max():.6f}")
         
-        return filename
+        # Verify submission format
+        if len(submission) == expected_rows and submission['id'].min() == 1 and submission['id'].max() == expected_rows:
+            print(f"✅ Submission format is correct!")
+        else:
+            print(f"❌ Submission format error!")
+            print(f"   Expected: {expected_rows} rows, ID 1-{expected_rows}")
+            print(f"   Actual: {len(submission)} rows, ID {submission['id'].min()}-{submission['id'].max()}")
         
-    def save_results(self):
-        """Save model results and predictions."""
-        print("\n" + "="*80)
-        print("SAVING RESULTS")
-        print("="*80)
-        
-        # Save results summary
-        results_summary = []
-        for model_name, result in self.results.items():
-            results_summary.append({
-                'Model': model_name,
-                'Avg_Score': result['avg_score'],
-                'Std_Score': result['std_score'],
-                'Min_Score': min(result['scores']),
-                'Max_Score': max(result['scores'])
-            })
-        
-        results_df = pd.DataFrame(results_summary)
-        results_df = results_df.sort_values('Avg_Score', ascending=False)
-        
-        # Save results
-        results_df.to_csv('/kaggle/working/results/gaussian_process_results.csv', index=False)
-        print("SUCCESS: Results summary saved")
-        
-        # Print results
-        print("\n" + "="*80)
-        print("GAUSSIAN PROCESS RESULTS")
-        print("="*80)
-        print(results_df.to_string(index=False))
-        
-        # Create submission files
-        for model_name, result in self.results.items():
-            self.create_submission_file(result['predictions'], model_name)
-        
-        # Memory optimization
-        gc.collect()
-        
-    def run_training(self):
-        """Run complete Gaussian Process training pipeline."""
-        print("="*80)
-        print("GAUSSIAN PROCESS TRAINING PIPELINE")
-        print("="*80)
-        
-        # Load and prepare data
-        self.load_data()
-        self.prepare_data()
-        
-        # Get feature columns
-        feature_cols = [col for col in self.X_train.columns if col != 'label']
-        
-        # Train model
-        print("\n" + "="*80)
-        print("TRAINING GAUSSIAN PROCESS MODEL")
-        print("="*80)
-        
-        # Gaussian Process Model
-        self.train_gaussian_process(self.X_train, self.y_train, feature_cols)
-        
-        # Save results
-        self.save_results()
-        
-        print("\n" + "="*80)
-        print("GAUSSIAN PROCESS TRAINING COMPLETED")
-        print("="*80)
+        return output_path
 
 def main():
-    """Main function to run the training pipeline."""
-    trainer = GaussianProcessTrainer()
-    trainer.run_training()
+    """Main execution function."""
+    print("="*80)
+    print("ULTRA-LIGHTWEIGHT GAUSSIAN PROCESS TRAINING")
+    print("="*80)
+    pst = pytz.timezone('US/Pacific')
+    current_time = datetime.now(pst)
+    print(f"Date: {current_time.strftime('%Y-%m-%d %H:%M:%S')} PST")
+    print(f"Memory optimization: ENABLED")
+    print(f"GPU: DISABLED")
+    print("="*80)
+    
+    # Create trainer
+    trainer = UltraLightGaussianProcess()
+    
+    # Train model
+    predictions = trainer.train()
+    
+    # Create submission
+    if predictions is not None:
+        submission_path = trainer.create_submission(predictions)
+        print(f"\n🎯 Ready for submission: {submission_path}")
+    else:
+        print("\n❌ Training failed - no submission created")
+    
+    print("="*80)
+    print("COMPLETED")
 
 if __name__ == "__main__":
     main() 

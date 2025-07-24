@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lightweight Neural Network Training for Kaggle
+Lightweight LSTM Training for Kaggle
 Optimized for memory constraints and kernel stability
 """
 
@@ -12,21 +12,24 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-# Disable GPU to avoid memory issues
+# Disable GPU and suppress TensorFlow warnings
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 # Import TensorFlow with memory optimization
 import tensorflow as tf
+
+# Force TensorFlow to use CPU only
+tf.config.set_visible_devices([], 'GPU')
+
+# Import Keras components
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
+from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-# Set TensorFlow to use CPU only
-tf.config.set_visible_devices([], 'GPU')
-
-class UltraLightNeuralNetwork:
+class UltraLightLSTM:
     def __init__(self):
         self.model = None
         self.scaler = None
@@ -62,18 +65,18 @@ class UltraLightNeuralNetwork:
         gc.collect()
         return train_data, test_data
     
-    def create_simple_features(self, df, is_train=True):
-        """Create simple features to minimize memory usage"""
-        print("Creating simple features...")
+    def create_time_series_features(self, df, is_train=True):
+        """Create time series features for LSTM"""
+        print("Creating time series features...")
         
         # Basic time features
         df['hour'] = df['timestamp'] % 24
         df['day_of_week'] = (df['timestamp'] // 24) % 7
         
-        # Select only a few important features to save memory
+        # Select important features for LSTM
         feature_cols = [col for col in df.columns if col.startswith('X')]
-        if len(feature_cols) > 20:  # Limit to top 20 features
-            feature_cols = feature_cols[:20]
+        if len(feature_cols) > 10:  # Limit to top 10 features for memory
+            feature_cols = feature_cols[:10]
         
         # Add selected features to the dataframe
         for col in feature_cols:
@@ -85,38 +88,63 @@ class UltraLightNeuralNetwork:
             if 'label' in df.columns:
                 target_col = 'label'
             else:
-                # Use first feature as target
                 target_col = feature_cols[0] if feature_cols else 'X1'
                 print(f"Using {target_col} as target variable")
             
-            # Create lag features
-            df['target_lag1'] = df[target_col].shift(1)
-            df['target_lag1'].fillna(0, inplace=True)
+            # Create lag features for time series
+            for lag in [1, 2, 3]:  # Small lags to save memory
+                df[f'target_lag{lag}'] = df[target_col].shift(lag)
+                df[f'target_lag{lag}'].fillna(0, inplace=True)
             
-            # Simple rolling mean
+            # Simple rolling statistics
             df['target_rolling_mean'] = df[target_col].rolling(window=5, min_periods=1).mean()
+            df['target_rolling_std'] = df[target_col].rolling(window=5, min_periods=1).std()
         else:
             # For test data, use zeros for lag features
-            df['target_lag1'] = 0
+            for lag in [1, 2, 3]:
+                df[f'target_lag{lag}'] = 0
             df['target_rolling_mean'] = 0
+            df['target_rolling_std'] = 0
         
         # Fill NaN values
         df.fillna(0, inplace=True)
         
         return df, feature_cols
     
-    def create_model(self, input_dim):
-        """Create ultra-lightweight neural network"""
-        print("Creating neural network model...")
+    def prepare_sequences(self, data, target_col, feature_cols, sequence_length=10):
+        """Prepare sequences for LSTM training"""
+        print(f"Preparing sequences with length {sequence_length}...")
+        
+        # Select features for LSTM
+        all_feature_cols = ['hour', 'day_of_week', 'target_lag1', 'target_lag2', 'target_lag3', 
+                           'target_rolling_mean', 'target_rolling_std'] + feature_cols
+        
+        # Prepare data
+        X_data = data[all_feature_cols].values
+        y_data = data[target_col].values
+        
+        # Create sequences
+        X_sequences = []
+        y_sequences = []
+        
+        for i in range(sequence_length, len(X_data)):
+            X_sequences.append(X_data[i-sequence_length:i])
+            y_sequences.append(y_data[i])
+        
+        return np.array(X_sequences), np.array(y_sequences)
+    
+    def create_lstm_model(self, input_shape):
+        """Create lightweight LSTM model"""
+        print("Creating LSTM model...")
         
         model = Sequential([
-            Dense(32, activation='relu', input_dim=input_dim),
-            BatchNormalization(),
+            LSTM(32, return_sequences=True, input_shape=input_shape),
             Dropout(0.2),
-            
-            Dense(16, activation='relu'),
             BatchNormalization(),
-            Dropout(0.1),
+            
+            LSTM(16, return_sequences=False),
+            Dropout(0.2),
+            BatchNormalization(),
             
             Dense(8, activation='relu'),
             BatchNormalization(),
@@ -134,16 +162,16 @@ class UltraLightNeuralNetwork:
         return model
     
     def train(self):
-        """Train ultra-lightweight neural network"""
-        print("Starting neural network training...")
+        """Train lightweight LSTM model"""
+        print("Starting LSTM training...")
         
         try:
             # Load data
             train_data, test_data = self.load_data()
             
             # Create features
-            train_data, feature_cols = self.create_simple_features(train_data, is_train=True)
-            test_data, _ = self.create_simple_features(test_data, is_train=False)
+            train_data, feature_cols = self.create_time_series_features(train_data, is_train=True)
+            test_data, _ = self.create_time_series_features(test_data, is_train=False)
             
             # Get target variable
             if 'label' in train_data.columns:
@@ -151,28 +179,31 @@ class UltraLightNeuralNetwork:
             else:
                 target_col = feature_cols[0] if feature_cols else 'X1'
             
-            # Select features for training
-            all_feature_cols = ['hour', 'day_of_week', 'target_lag1', 'target_rolling_mean'] + feature_cols
-            
             # Use small sample for training
-            sample_size = min(5000, len(train_data))  # Very small sample
+            sample_size = min(3000, len(train_data))  # Very small sample for LSTM
             sample_idx = np.random.choice(len(train_data), sample_size, replace=False)
             
-            X_train = train_data.iloc[sample_idx][all_feature_cols]
-            y_train = train_data.iloc[sample_idx][target_col]
+            train_sample = train_data.iloc[sample_idx].copy()
             
-            X_test = test_data[all_feature_cols]
+            print(f"Training on {len(train_sample)} samples")
             
-            print(f"Training on {len(X_train)} samples with {len(all_feature_cols)} features")
+            # Prepare sequences
+            sequence_length = 10  # Short sequence to save memory
+            X_train, y_train = self.prepare_sequences(train_sample, target_col, feature_cols, sequence_length)
+            
+            print(f"Sequences shape: X={X_train.shape}, y={y_train.shape}")
             
             # Scale features
             from sklearn.preprocessing import StandardScaler
             self.scaler = StandardScaler()
-            X_train_scaled = self.scaler.fit_transform(X_train)
-            X_test_scaled = self.scaler.transform(X_test)
+            
+            # Reshape for scaling
+            X_train_reshaped = X_train.reshape(-1, X_train.shape[-1])
+            X_train_scaled = self.scaler.fit_transform(X_train_reshaped)
+            X_train_scaled = X_train_scaled.reshape(X_train.shape)
             
             # Create and train model
-            self.model = self.create_model(X_train_scaled.shape[1])
+            self.model = self.create_lstm_model((sequence_length, X_train.shape[2]))
             
             # Callbacks for early stopping
             callbacks = [
@@ -194,23 +225,37 @@ class UltraLightNeuralNetwork:
             # Train with very small batch size
             history = self.model.fit(
                 X_train_scaled, y_train,
-                epochs=20,  # Fewer epochs
-                batch_size=256,  # Smaller batch size
+                epochs=15,  # Fewer epochs for LSTM
+                batch_size=32,  # Very small batch size
                 callbacks=callbacks,
                 verbose=1,
                 validation_split=0.2
             )
             
+            # Prepare test sequences
+            print("Preparing test sequences...")
+            X_test, _ = self.prepare_sequences(test_data, target_col, feature_cols, sequence_length)
+            
+            # Scale test data
+            X_test_reshaped = X_test.reshape(-1, X_test.shape[-1])
+            X_test_scaled = self.scaler.transform(X_test_reshaped)
+            X_test_scaled = X_test_scaled.reshape(X_test.shape)
+            
             # Make predictions
             print("Making predictions...")
-            predictions = self.model.predict(X_test_scaled, batch_size=256)
+            predictions = self.model.predict(X_test_scaled, batch_size=32)
             predictions = predictions.flatten()
             
+            # Pad predictions to match test data length
+            if len(predictions) < len(test_data):
+                padding = [predictions[-1]] * (len(test_data) - len(predictions))
+                predictions = np.concatenate([predictions, padding])
+            
             # Clean up memory
-            del X_train, y_train, X_train_scaled, X_test_scaled
+            del X_train, y_train, X_train_scaled, X_test, X_test_scaled
             gc.collect()
             
-            print(f"SUCCESS: Neural Network trained on {sample_size} samples")
+            print(f"SUCCESS: LSTM trained on {len(train_sample)} samples")
             print(f"Predictions: {len(predictions)}")
             print(f"Mean prediction: {np.mean(predictions):.6f}")
             
@@ -248,7 +293,7 @@ class UltraLightNeuralNetwork:
         })
         
         # Save to Kaggle working directory
-        output_path = '/kaggle/working/neural_network_submission.csv'
+        output_path = '/kaggle/working/lstm_submission.csv'
         submission.to_csv(output_path, index=False)
         
         print(f"✅ Submission saved: {output_path}")
@@ -273,18 +318,16 @@ class UltraLightNeuralNetwork:
 def main():
     """Main execution function"""
     print("="*80)
-    print("ULTRA-LIGHTWEIGHT NEURAL NETWORK TRAINING")
+    print("ULTRA-LIGHTWEIGHT LSTM TRAINING")
     print("="*80)
-    import pytz
-    pst = pytz.timezone('US/Pacific')
-    current_time = datetime.now(pst)
-    print(f"Date: {current_time.strftime('%Y-%m-%d %H:%M:%S')} PST")
+    print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Memory optimization: ENABLED")
     print(f"GPU: DISABLED")
+    print(f"Model: LSTM (Time Series)")
     print("="*80)
     
     # Create trainer
-    trainer = UltraLightNeuralNetwork()
+    trainer = UltraLightLSTM()
     
     # Train model
     predictions = trainer.train()

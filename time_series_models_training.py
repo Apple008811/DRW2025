@@ -1,327 +1,310 @@
 #!/usr/bin/env python3
 """
-Time Series Models Training Script
-==================================
-
-Trains and evaluates time series models (ARIMA, Prophet) for cryptocurrency market prediction.
-
-Author: Yixuan
-Date: 2025-01-22
+Ultra-Lightweight Time Series Models Training for Kaggle
+Optimized for memory constraints and kernel stability
 """
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy.stats import pearsonr
+import os
+import gc
+from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-# Memory optimization
-import gc
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# Disable GPU and suppress warnings
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 # Time Series Models
-try:
-    from statsmodels.tsa.arima.model import ARIMA
-    ARIMA_AVAILABLE = True
-except ImportError:
-    print("WARNING: statsmodels not available, skipping ARIMA model")
-    ARIMA_AVAILABLE = False
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from scipy.stats import pearsonr
 
-try:
-    from prophet import Prophet
-    PROPHET_AVAILABLE = True
-except ImportError:
-    print("WARNING: Prophet not available, skipping Prophet model")
-    PROPHET_AVAILABLE = False
-
-# Set style for better plots
-plt.style.use('seaborn-v0_8')
-sns.set_palette("husl")
-
-class TimeSeriesModelsTrainer:
+class UltraLightTimeSeriesModels:
     def __init__(self):
-        """Initialize time series models training."""
-        self.train = None
-        self.test = None
-        self.train_features = None
-        self.test_features = None
-        
-        # Model results storage
         self.models = {}
-        self.results = {}
-        
-        # File paths
-        self.train_file = '/kaggle/input/drw-crypto-market-prediction/train.parquet'
-        self.test_file = '/kaggle/input/drw-crypto-market-prediction/test.parquet'
-        self.features_file = '/kaggle/working/engineered_features.parquet'
-        
-        # Create results directory
-        os.makedirs('/kaggle/working/results', exist_ok=True)
+        self.scaler = None
+        self.feature_columns = None
         
     def load_data(self):
-        """Load data and engineered features."""
-        print("Loading data and engineered features...")
+        """Load data with memory optimization"""
+        print("Loading data...")
         
-        # Load original data
-        self.train = pd.read_parquet(self.train_file)
-        self.test = pd.read_parquet(self.test_file)
+        # Load train data
+        train_data = pd.read_parquet('/kaggle/input/drw-crypto-market-prediction/train.parquet')
+        print(f"Train data shape: {train_data.shape}")
         
-        # Load engineered features (from Phase 3)
-        try:
-            features_data = pd.read_parquet(self.features_file)
-            self.train_features = features_data[features_data.index < len(self.train)]
-            self.test_features = features_data[features_data.index >= len(self.train)]
-            print(f"SUCCESS: Engineered features loaded: {self.train_features.shape}")
-        except:
-            print("WARNING: Engineered features not found, using original features")
-            self.train_features = self.train.drop(['label'], axis=1, errors='ignore')
-            self.test_features = self.test.copy()
+        # Load test data
+        test_data = pd.read_parquet('/kaggle/input/drw-crypto-market-prediction/test.parquet')
+        print(f"Test data shape: {test_data.shape}")
         
-        print(f"SUCCESS: Train data: {self.train.shape}")
-        print(f"SUCCESS: Test data: {self.test.shape}")
+        # Create ID and timestamp columns if they don't exist
+        if 'id' not in train_data.columns:
+            train_data['id'] = range(len(train_data))
+        if 'timestamp' not in train_data.columns:
+            train_data['timestamp'] = range(len(train_data))
+            
+        if 'id' not in test_data.columns:
+            test_data['id'] = range(len(test_data))
+        if 'timestamp' not in test_data.columns:
+            test_data['timestamp'] = range(len(test_data))
         
-    def prepare_data(self):
-        """Prepare data for training."""
-        print("\n" + "="*80)
-        print("DATA PREPARATION")
-        print("="*80)
-        
-        # Get target variable
-        self.y_train = self.train['label']
-        
-        # Prepare time series data
-        self.y_series = self.y_train.reset_index(drop=True)
-        
-        print(f"SUCCESS: Time series data: {self.y_series.shape}")
-        
-        # Memory optimization
         gc.collect()
+        return train_data, test_data
+    
+    def create_time_series_features(self, df, is_train=True):
+        """Create time series features"""
+        print("Creating time series features...")
         
-    def train_arima_model(self):
-        """Train ARIMA model."""
-        if not ARIMA_AVAILABLE:
-            print("SKIPPED: ARIMA model (statsmodels not available)")
-            return None
+        # Basic time features
+        df['hour'] = df['timestamp'] % 24
+        df['day_of_week'] = (df['timestamp'] // 24) % 7
+        
+        # Select only a few important features to save memory
+        feature_cols = [col for col in df.columns if col.startswith('X')]
+        if len(feature_cols) > 20:  # Limit to top 20 features for time series
+            feature_cols = feature_cols[:20]
+        
+        # Add selected features to the dataframe
+        for col in feature_cols:
+            if col not in df.columns:
+                df[col] = 0
+        
+        if is_train:
+            # For training data, create target variable
+            if 'label' in df.columns:
+                target_col = 'label'
+            else:
+                # Use first feature as target
+                target_col = feature_cols[0] if feature_cols else 'X1'
+                print(f"Using {target_col} as target variable")
             
-        print("\nTraining ARIMA model...")
+            # Create lag features
+            df['target_lag1'] = df[target_col].shift(1)
+            df['target_lag1'].fillna(0, inplace=True)
+            
+            # Simple rolling mean
+            df['target_rolling_mean'] = df[target_col].rolling(window=5, min_periods=1).mean()
+        else:
+            # For test data, use zeros for lag features
+            df['target_lag1'] = 0
+            df['target_rolling_mean'] = 0
+        
+        # Fill NaN values
+        df.fillna(0, inplace=True)
+        
+        return df, feature_cols
+    
+    def train_arima(self, train_data, target_col):
+        """Train ARIMA model"""
+        print("Training ARIMA model...")
         
         try:
-            # Use a subset for computational efficiency
-            sample_size = min(5000, len(self.y_series))
-            y_sample = self.y_series.head(sample_size)
+            # Use small sample for ARIMA training
+            sample_size = min(3000, len(train_data))
+            sample_data = train_data.sample(n=sample_size, random_state=42)
             
-            # Fit ARIMA model
-            arima_model = ARIMA(y_sample, order=(1, 1, 1))
-            arima_fitted = arima_model.fit()
+            # Get target series
+            target_series = sample_data[target_col]
             
-            # Simple validation
-            train_size = int(len(y_sample) * 0.8)
-            y_train_arima = y_sample[:train_size]
-            y_val_arima = y_sample[train_size:]
+            # Fit ARIMA model with simple parameters
+            model = ARIMA(target_series, order=(1, 0, 1))
+            fitted_model = model.fit()
             
-            # Fit on training data
-            arima_train = ARIMA(y_train_arima, order=(1, 1, 1))
-            arima_fitted_train = arima_train.fit()
+            print(f"ARIMA model fitted successfully")
+            print(f"AIC: {fitted_model.aic:.2f}")
             
-            # Predict validation set
-            arima_forecast = arima_fitted_train.forecast(steps=len(y_val_arima))
-            score = pearsonr(y_val_arima, arima_forecast)[0]
-            
-            # Predict test set
-            arima_test_forecast = arima_fitted.forecast(steps=len(self.test))
-            
-            # Store results
-            self.models['ARIMA'] = arima_fitted
-            self.results['ARIMA'] = {
-                'avg_score': score,
-                'std_score': 0.0,
-                'scores': [score],
-                'predictions': arima_test_forecast
-            }
-            
-            print(f"SUCCESS: ARIMA: {score:.4f}")
-            return arima_test_forecast
+            return fitted_model
             
         except Exception as e:
             print(f"ERROR: ARIMA training failed: {e}")
             return None
-        
-    def train_prophet_model(self):
-        """Train Prophet model."""
-        if not PROPHET_AVAILABLE:
-            print("SKIPPED: Prophet model (prophet not available)")
-            return None
-            
-        print("\nTraining Prophet model...")
+    
+    def train_sarima(self, train_data, target_col):
+        """Train SARIMA model"""
+        print("Training SARIMA model...")
         
         try:
-            # Prepare data for Prophet
-            sample_size = min(2000, len(self.y_series))
-            y_sample = self.y_series.head(sample_size)
+            # Use small sample for SARIMA training
+            sample_size = min(2000, len(train_data))
+            sample_data = train_data.sample(n=sample_size, random_state=42)
             
-            # Create Prophet dataframe
-            prophet_df = pd.DataFrame({
-                'ds': pd.date_range(start='2020-01-01', periods=len(y_sample), freq='H'),
-                'y': y_sample.values
-            })
+            # Get target series
+            target_series = sample_data[target_col]
             
-            # Fit Prophet model
-            prophet_model = Prophet(
-                yearly_seasonality=True,
-                weekly_seasonality=True,
-                daily_seasonality=True,
-                seasonality_mode='multiplicative'
-            )
-            prophet_model.fit(prophet_df)
+            # Fit SARIMA model with simple parameters
+            model = SARIMAX(target_series, order=(1, 0, 1), seasonal_order=(1, 0, 1, 24))
+            fitted_model = model.fit(disp=False)
             
-            # Simple validation
-            train_size = int(len(prophet_df) * 0.8)
-            prophet_train = prophet_df.head(train_size)
-            prophet_val = prophet_df.tail(len(prophet_df) - train_size)
+            print(f"SARIMA model fitted successfully")
+            print(f"AIC: {fitted_model.aic:.2f}")
             
-            # Fit on training data
-            prophet_model_train = Prophet(
-                yearly_seasonality=True,
-                weekly_seasonality=True,
-                daily_seasonality=True,
-                seasonality_mode='multiplicative'
-            )
-            prophet_model_train.fit(prophet_train)
-            
-            # Predict validation set
-            prophet_forecast = prophet_model_train.predict(prophet_val)
-            score = pearsonr(prophet_val['y'], prophet_forecast['yhat'])[0]
-            
-            # Predict test set
-            test_dates = pd.date_range(
-                start=prophet_df['ds'].iloc[-1] + pd.Timedelta(hours=1),
-                periods=len(self.test),
-                freq='H'
-            )
-            test_df = pd.DataFrame({'ds': test_dates})
-            prophet_test_forecast = prophet_model.predict(test_df)
-            
-            # Store results
-            self.models['Prophet'] = prophet_model
-            self.results['Prophet'] = {
-                'avg_score': score,
-                'std_score': 0.0,
-                'scores': [score],
-                'predictions': prophet_test_forecast['yhat'].values
-            }
-            
-            print(f"SUCCESS: Prophet: {score:.4f}")
-            return prophet_test_forecast['yhat'].values
+            return fitted_model
             
         except Exception as e:
-            print(f"ERROR: Prophet training failed: {e}")
+            print(f"ERROR: SARIMA training failed: {e}")
             return None
-        
-    def create_submission_file(self, predictions, model_name):
-        """Create submission file for Kaggle."""
-        print(f"\nCreating submission file for {model_name}...")
-        
-        # Ensure correct number of rows (538,150)
-        expected_rows = 538150
-        if len(predictions) != expected_rows:
-            print(f"WARNING: Expected {expected_rows} rows, got {len(predictions)}")
-            if len(predictions) < expected_rows:
+    
+    def generate_predictions(self, model, n_periods):
+        """Generate predictions from time series model"""
+        try:
+            if model is None:
+                return np.zeros(n_periods)
+            
+            # Generate forecasts
+            forecast = model.forecast(steps=n_periods)
+            
+            # Ensure we have the right number of predictions
+            if len(forecast) < n_periods:
                 # Pad with last prediction
-                predictions = list(predictions) + [predictions[-1]] * (expected_rows - len(predictions))
-            else:
+                padding = [forecast.iloc[-1]] * (n_periods - len(forecast))
+                forecast = np.concatenate([forecast.values, padding])
+            elif len(forecast) > n_periods:
                 # Truncate
-                predictions = predictions[:expected_rows]
+                forecast = forecast[:n_periods].values
+            else:
+                forecast = forecast.values
+            
+            return forecast
+            
+        except Exception as e:
+            print(f"ERROR: Prediction generation failed: {e}")
+            return np.zeros(n_periods)
+    
+    def train(self):
+        """Train ultra-lightweight time series models"""
+        print("Starting time series models training...")
         
-        # Create submission dataframe with correct format (like LightGBM)
-        submission_ids = list(range(1, expected_rows + 1))
-        submission = pd.DataFrame({
-            'id': submission_ids,
-            'prediction': predictions
-        })
+        try:
+            # Load data
+            train_data, test_data = self.load_data()
+            
+            # Create features
+            train_data, feature_cols = self.create_time_series_features(train_data, is_train=True)
+            test_data, _ = self.create_time_series_features(test_data, is_train=False)
+            
+            # Get target variable
+            if 'label' in train_data.columns:
+                target_col = 'label'
+            else:
+                target_col = feature_cols[0] if feature_cols else 'X1'
+            
+            print(f"Training on {len(train_data)} samples with target: {target_col}")
+            
+            # Train models
+            results = {}
+            
+            # Train ARIMA
+            arima_model = self.train_arima(train_data, target_col)
+            if arima_model is not None:
+                arima_predictions = self.generate_predictions(arima_model, len(test_data))
+                results['arima'] = {
+                    'model': arima_model,
+                    'predictions': arima_predictions
+                }
+                print(f"ARIMA predictions: {len(arima_predictions)}")
+            
+            # Train SARIMA
+            sarima_model = self.train_sarima(train_data, target_col)
+            if sarima_model is not None:
+                sarima_predictions = self.generate_predictions(sarima_model, len(test_data))
+                results['sarima'] = {
+                    'model': sarima_model,
+                    'predictions': sarima_predictions
+                }
+                print(f"SARIMA predictions: {len(sarima_predictions)}")
+            
+            # Clean up memory
+            del train_data, test_data
+            gc.collect()
+            
+            print(f"SUCCESS: Time series models trained")
+            
+            return results
+            
+        except Exception as e:
+            print(f"ERROR: Training failed: {e}")
+            return None
+    
+    def create_submission(self, results):
+        """Create submission files for each model"""
+        if results is None:
+            print("ERROR: No results to create submission")
+            return
         
-        # Save submission file (same path as LightGBM)
-        filename = f'/kaggle/working/{model_name.lower()}_submission.csv'
-        submission.to_csv(filename, index=False)
-        print(f"SUCCESS: Submission file saved: {filename}")
-        print(f"   Predictions: {len(submission)} rows")
-        print(f"   Prediction range: {min(predictions):.4f} to {max(predictions):.4f}")
-        print(f"   Prediction mean: {np.mean(predictions):.4f}")
-        print(f"   Prediction std: {np.std(predictions):.4f}")
+        print("Creating submission files...")
         
-        return filename
-        
-    def save_results(self):
-        """Save model results and predictions."""
-        print("\n" + "="*80)
-        print("SAVING RESULTS")
-        print("="*80)
-        
-        # Save results summary
-        results_summary = []
-        for model_name, result in self.results.items():
-            results_summary.append({
-                'Model': model_name,
-                'Avg_Score': result['avg_score'],
-                'Std_Score': result['std_score'],
-                'Min_Score': min(result['scores']),
-                'Max_Score': max(result['scores'])
+        for model_name, result in results.items():
+            predictions = result['predictions']
+            
+            # Create submission dataframe with correct format
+            expected_rows = 538150
+            
+            # Ensure we have the correct number of predictions
+            if len(predictions) != expected_rows:
+                print(f"WARNING: Expected {expected_rows} predictions, got {len(predictions)}")
+                if len(predictions) < expected_rows:
+                    # Pad with last prediction value
+                    padding = [predictions[-1]] * (expected_rows - len(predictions))
+                    predictions = np.concatenate([predictions, padding])
+                else:
+                    # Truncate to expected length
+                    predictions = predictions[:expected_rows]
+            
+            submission = pd.DataFrame({
+                'id': range(1, expected_rows + 1),  # IDs from 1 to 538150
+                'prediction': predictions
             })
-        
-        results_df = pd.DataFrame(results_summary)
-        results_df = results_df.sort_values('Avg_Score', ascending=False)
-        
-        # Save results
-        results_df.to_csv('/kaggle/working/results/time_series_models_results.csv', index=False)
-        print("SUCCESS: Results summary saved")
-        
-        # Print results
-        print("\n" + "="*80)
-        print("TIME SERIES MODELS RESULTS")
-        print("="*80)
-        print(results_df.to_string(index=False))
-        
-        # Create submission files
-        for model_name, result in self.results.items():
-            self.create_submission_file(result['predictions'], model_name)
-        
-        # Memory optimization
-        gc.collect()
-        
-    def run_training(self):
-        """Run complete time series models training pipeline."""
-        print("="*80)
-        print("TIME SERIES MODELS TRAINING PIPELINE")
-        print("="*80)
-        
-        # Load and prepare data
-        self.load_data()
-        self.prepare_data()
-        
-        # Train models
-        print("\n" + "="*80)
-        print("TRAINING TIME SERIES MODELS")
-        print("="*80)
-        
-        # ARIMA Model
-        self.train_arima_model()
-        
-        # Prophet Model
-        self.train_prophet_model()
-        
-        # Save results
-        self.save_results()
-        
-        print("\n" + "="*80)
-        print("TIME SERIES MODELS TRAINING COMPLETED")
-        print("="*80)
+            
+            # Save to Kaggle working directory
+            output_path = f'/kaggle/working/{model_name}_submission.csv'
+            submission.to_csv(output_path, index=False)
+            
+            print(f"✅ {model_name} submission saved: {output_path}")
+            print(f"   Rows: {len(submission)} (expected: {expected_rows})")
+            print(f"   Mean: {submission['prediction'].mean():.6f}")
+            print(f"   Std: {submission['prediction'].std():.6f}")
+            print(f"   Min: {submission['prediction'].min():.6f}")
+            print(f"   Max: {submission['prediction'].max():.6f}")
+            
+            # Verify submission format
+            if len(submission) == expected_rows and submission['id'].min() == 1 and submission['id'].max() == expected_rows:
+                print(f"   ✅ Submission format is correct!")
+            else:
+                print(f"   ❌ Submission format error!")
 
 def main():
-    """Main function to run the training pipeline."""
-    trainer = TimeSeriesModelsTrainer()
-    trainer.run_training()
+    """Main execution function"""
+    print("="*80)
+    print("ULTRA-LIGHTWEIGHT TIME SERIES MODELS TRAINING")
+    print("="*80)
+    import pytz
+    pst = pytz.timezone('US/Pacific')
+    current_time = datetime.now(pst)
+    print(f"Date: {current_time.strftime('%Y-%m-%d %H:%M:%S')} PST")
+    print(f"Memory optimization: ENABLED")
+    print(f"GPU: DISABLED")
+    print(f"Models: ARIMA(1,0,1), SARIMA(1,0,1)(1,0,1,24)")
+    print("="*80)
+    
+    # Create trainer
+    trainer = UltraLightTimeSeriesModels()
+    
+    # Train models
+    results = trainer.train()
+    
+    # Create submissions
+    if results is not None:
+        trainer.create_submission(results)
+        print(f"\n🎯 Ready for submission!")
+    else:
+        print("\n❌ Training failed - no submission created")
+    
+    print("="*80)
+    print("COMPLETED")
 
 if __name__ == "__main__":
     main() 

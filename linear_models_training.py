@@ -1,326 +1,267 @@
 #!/usr/bin/env python3
 """
-Linear Models Training Script
-=============================
-
-Trains and evaluates linear models (Linear Regression, Ridge, Lasso) for cryptocurrency market prediction.
-
-Author: Yixuan
-Date: 2025-07-23
+Ultra-Lightweight Linear Models Training for Kaggle
+Optimized for memory constraints and kernel stability
 """
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy.stats import pearsonr
+import os
+import gc
+from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-# Memory optimization
-import gc
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# Disable GPU and suppress warnings
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 # Machine Learning Models
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from scipy.stats import pearsonr
 
-# Set style for better plots
-plt.style.use('seaborn-v0_8')
-sns.set_palette("husl")
-
-class LinearModelsTrainer:
+class UltraLightLinearModels:
     def __init__(self):
-        """Initialize linear models training."""
-        self.train = None
-        self.test = None
-        self.train_features = None
-        self.test_features = None
-        
-        # Model results storage
         self.models = {}
-        self.results = {}
-        
-        # File paths
-        self.train_file = '/kaggle/input/drw-crypto-market-prediction/train.parquet'
-        self.test_file = '/kaggle/input/drw-crypto-market-prediction/test.parquet'
-        self.features_file = '/kaggle/working/engineered_features.parquet'
-        
-        # Create results directory
-        os.makedirs('/kaggle/working/results', exist_ok=True)
+        self.scaler = None
+        self.feature_columns = None
         
     def load_data(self):
-        """Load data and engineered features."""
-        print("Loading data and engineered features...")
+        """Load data with memory optimization"""
+        print("Loading data...")
         
-        # Load original data
-        self.train = pd.read_parquet(self.train_file)
-        self.test = pd.read_parquet(self.test_file)
+        # Load train data
+        train_data = pd.read_parquet('/kaggle/input/drw-crypto-market-prediction/train.parquet')
+        print(f"Train data shape: {train_data.shape}")
         
-        # Load engineered features (from Phase 3)
-        try:
-            features_data = pd.read_parquet(self.features_file)
-            self.train_features = features_data[features_data.index < len(self.train)]
-            self.test_features = features_data[features_data.index >= len(self.train)]
-            print(f"SUCCESS: Engineered features loaded: {self.train_features.shape}")
-        except:
-            print("WARNING: Engineered features not found, using original features")
-            self.train_features = self.train.drop(['label'], axis=1, errors='ignore')
-            self.test_features = self.test.copy()
+        # Load test data
+        test_data = pd.read_parquet('/kaggle/input/drw-crypto-market-prediction/test.parquet')
+        print(f"Test data shape: {test_data.shape}")
         
-        print(f"SUCCESS: Train data: {self.train.shape}")
-        print(f"SUCCESS: Test data: {self.test.shape}")
+        # Create ID and timestamp columns if they don't exist
+        if 'id' not in train_data.columns:
+            train_data['id'] = range(len(train_data))
+        if 'timestamp' not in train_data.columns:
+            train_data['timestamp'] = range(len(train_data))
+            
+        if 'id' not in test_data.columns:
+            test_data['id'] = range(len(test_data))
+        if 'timestamp' not in test_data.columns:
+            test_data['timestamp'] = range(len(test_data))
         
-    def prepare_data(self):
-        """Prepare data for training."""
-        print("\n" + "="*80)
-        print("DATA PREPARATION")
-        print("="*80)
-        
-        # Get target variable
-        self.y_train = self.train['label']
-        
-        # Prepare feature columns
-        feature_cols = [col for col in self.train_features.columns if col != 'label']
-        self.X_train = self.train_features[feature_cols]
-        self.X_test = self.test_features[feature_cols]
-        
-        # Handle missing values
-        self.X_train = self.X_train.fillna(0)
-        self.X_test = self.X_test.fillna(0)
-        
-        # Remove infinite values
-        self.X_train = self.X_train.replace([np.inf, -np.inf], 0)
-        self.X_test = self.X_test.replace([np.inf, -np.inf], 0)
-        
-        print(f"SUCCESS: Training features: {self.X_train.shape}")
-        print(f"SUCCESS: Test features: {self.X_test.shape}")
-        print(f"SUCCESS: Target variable: {self.y_train.shape}")
-        
-        # Memory optimization
         gc.collect()
+        return train_data, test_data
+    
+    def create_simple_features(self, df, is_train=True):
+        """Create simple features to minimize memory usage"""
+        print("Creating simple features...")
         
-    def time_series_cv(self, model, X, y, n_splits=5):
-        """Perform time series cross-validation."""
-        tscv = TimeSeriesSplit(n_splits=n_splits)
-        scores = []
+        # Basic time features
+        df['hour'] = df['timestamp'] % 24
+        df['day_of_week'] = (df['timestamp'] // 24) % 7
         
-        for train_idx, val_idx in tscv.split(X):
-            X_train_fold = X.iloc[train_idx]
-            y_train_fold = y.iloc[train_idx]
-            X_val_fold = X.iloc[val_idx]
-            y_val_fold = y.iloc[val_idx]
-            
-            # Fit model
-            model.fit(X_train_fold, y_train_fold)
-            
-            # Predict
-            y_pred = model.predict(X_val_fold)
-            
-            # Calculate correlation
-            score = pearsonr(y_val_fold, y_pred)[0]
-            scores.append(score)
-            
-        return np.mean(scores), np.std(scores), scores
+        # Select only a few important features to save memory
+        feature_cols = [col for col in df.columns if col.startswith('X')]
+        if len(feature_cols) > 50:  # Limit to top 50 features
+            feature_cols = feature_cols[:50]
         
-    def train_linear_regression(self, X, y, feature_cols):
-        """Train Linear Regression model."""
-        print("\nTraining Linear Regression...")
+        # Add selected features to the dataframe
+        for col in feature_cols:
+            if col not in df.columns:
+                df[col] = 0
         
-        # Standardize features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        X_test_scaled = scaler.transform(self.X_test)
-        
-        # Time series cross-validation
-        model = LinearRegression()
-        avg_score, std_score, scores = self.time_series_cv(model, X, y)
-        
-        # Train final model
-        model.fit(X_scaled, y)
-        predictions = model.predict(X_test_scaled)
-        
-        # Store results
-        self.models['Linear Regression'] = {'model': model, 'scaler': scaler}
-        self.results['Linear Regression'] = {
-            'avg_score': avg_score,
-            'std_score': std_score,
-            'scores': scores,
-            'predictions': predictions
-        }
-        
-        print(f"SUCCESS: Linear Regression: {avg_score:.4f} ± {std_score:.4f}")
-        return predictions
-        
-    def train_ridge_regression(self, X, y, feature_cols):
-        """Train Ridge Regression model."""
-        print("\nTraining Ridge Regression...")
-        
-        # Standardize features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        X_test_scaled = scaler.transform(self.X_test)
-        
-        # Time series cross-validation
-        model = Ridge(alpha=1.0)
-        avg_score, std_score, scores = self.time_series_cv(model, X, y)
-        
-        # Train final model
-        model.fit(X_scaled, y)
-        predictions = model.predict(X_test_scaled)
-        
-        # Store results
-        self.models['Ridge Regression'] = {'model': model, 'scaler': scaler}
-        self.results['Ridge Regression'] = {
-            'avg_score': avg_score,
-            'std_score': std_score,
-            'scores': scores,
-            'predictions': predictions
-        }
-        
-        print(f"SUCCESS: Ridge Regression: {avg_score:.4f} ± {std_score:.4f}")
-        return predictions
-        
-    def train_lasso_regression(self, X, y, feature_cols):
-        """Train Lasso Regression model."""
-        print("\nTraining Lasso Regression...")
-        
-        # Standardize features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        X_test_scaled = scaler.transform(self.X_test)
-        
-        # Time series cross-validation
-        model = Lasso(alpha=0.01)
-        avg_score, std_score, scores = self.time_series_cv(model, X, y)
-        
-        # Train final model
-        model.fit(X_scaled, y)
-        predictions = model.predict(X_test_scaled)
-        
-        # Store results
-        self.models['Lasso Regression'] = {'model': model, 'scaler': scaler}
-        self.results['Lasso Regression'] = {
-            'avg_score': avg_score,
-            'std_score': std_score,
-            'scores': scores,
-            'predictions': predictions
-        }
-        
-        print(f"SUCCESS: Lasso Regression: {avg_score:.4f} ± {std_score:.4f}")
-        return predictions
-        
-    def create_submission_file(self, predictions, model_name):
-        """Create submission file for Kaggle."""
-        print(f"\nCreating submission file for {model_name}...")
-        
-        # Ensure correct number of rows (538,150)
-        expected_rows = 538150
-        if len(predictions) != expected_rows:
-            print(f"WARNING: Expected {expected_rows} rows, got {len(predictions)}")
-            if len(predictions) < expected_rows:
-                # Pad with last prediction
-                predictions = list(predictions) + [predictions[-1]] * (expected_rows - len(predictions))
+        if is_train:
+            # For training data, create target variable
+            if 'label' in df.columns:
+                target_col = 'label'
             else:
-                # Truncate
-                predictions = predictions[:expected_rows]
+                # Use first feature as target
+                target_col = feature_cols[0] if feature_cols else 'X1'
+                print(f"Using {target_col} as target variable")
+            
+            # Create lag features
+            df['target_lag1'] = df[target_col].shift(1)
+            df['target_lag1'].fillna(0, inplace=True)
+            
+            # Simple rolling mean
+            df['target_rolling_mean'] = df[target_col].rolling(window=5, min_periods=1).mean()
+        else:
+            # For test data, use zeros for lag features
+            df['target_lag1'] = 0
+            df['target_rolling_mean'] = 0
         
-        # Create submission dataframe with correct format (like LightGBM)
-        submission_ids = list(range(1, expected_rows + 1))
-        submission = pd.DataFrame({
-            'id': submission_ids,
-            'prediction': predictions
-        })
+        # Fill NaN values
+        df.fillna(0, inplace=True)
         
-        # Save submission file (same path as LightGBM)
-        filename = f'/kaggle/working/{model_name.lower().replace(" ", "_")}_submission.csv'
-        submission.to_csv(filename, index=False)
-        print(f"SUCCESS: Submission file saved: {filename}")
-        print(f"   Predictions: {len(submission)} rows")
-        print(f"   Prediction range: {min(predictions):.4f} to {max(predictions):.4f}")
-        print(f"   Prediction mean: {np.mean(predictions):.4f}")
-        print(f"   Prediction std: {np.std(predictions):.4f}")
+        return df, feature_cols
+    
+    def train_models(self):
+        """Train ultra-lightweight linear models"""
+        print("Starting linear models training...")
         
-        return filename
+        try:
+            # Load data
+            train_data, test_data = self.load_data()
+            
+            # Create features
+            train_data, feature_cols = self.create_simple_features(train_data, is_train=True)
+            test_data, _ = self.create_simple_features(test_data, is_train=False)
+            
+            # Get target variable
+            if 'label' in train_data.columns:
+                target_col = 'label'
+            else:
+                target_col = feature_cols[0] if feature_cols else 'X1'
+            
+            # Select features for training
+            all_feature_cols = ['hour', 'day_of_week', 'target_lag1', 'target_rolling_mean'] + feature_cols
+            
+            # Use small sample for training
+            sample_size = min(10000, len(train_data))  # Small sample
+            sample_idx = np.random.choice(len(train_data), sample_size, replace=False)
+            
+            X_train = train_data.iloc[sample_idx][all_feature_cols]
+            y_train = train_data.iloc[sample_idx][target_col]
+            
+            X_test = test_data[all_feature_cols]
+            
+            print(f"Training on {len(X_train)} samples with {len(all_feature_cols)} features")
+            
+            # Scale features
+            self.scaler = StandardScaler()
+            X_train_scaled = self.scaler.fit_transform(X_train)
+            X_test_scaled = self.scaler.transform(X_test)
+            
+            # Train models
+            models = {
+                'linear_regression': LinearRegression(),
+                'ridge_regression': Ridge(alpha=1.0),
+                'lasso_regression': Lasso(alpha=0.1)
+            }
+            
+            results = {}
+            
+            for model_name, model in models.items():
+                print(f"\nTraining {model_name}...")
+                
+                # Train model
+                model.fit(X_train_scaled, y_train)
+                
+                # Make predictions
+                train_pred = model.predict(X_train_scaled)
+                test_pred = model.predict(X_test_scaled)
+                
+                # Calculate metrics
+                train_corr = pearsonr(y_train, train_pred)[0]
+                train_mse = mean_squared_error(y_train, train_pred)
+                train_mae = mean_absolute_error(y_train, train_pred)
+                
+                print(f"  Train Correlation: {train_corr:.6f}")
+                print(f"  Train MSE: {train_mse:.6f}")
+                print(f"  Train MAE: {train_mae:.6f}")
+                
+                results[model_name] = {
+                    'model': model,
+                    'train_corr': train_corr,
+                    'train_mse': train_mse,
+                    'train_mae': train_mae,
+                    'predictions': test_pred
+                }
+                
+                # Clean up memory
+                del train_pred
+                gc.collect()
+            
+            # Clean up memory
+            del X_train, y_train, X_train_scaled, X_test_scaled
+            gc.collect()
+            
+            print(f"\nSUCCESS: All linear models trained on {sample_size} samples")
+            
+            return results
+            
+        except Exception as e:
+            print(f"ERROR: Training failed: {e}")
+            return None
+    
+    def create_submission(self, results):
+        """Create submission files for each model"""
+        if results is None:
+            print("ERROR: No results to create submission")
+            return
         
-    def save_results(self):
-        """Save model results and predictions."""
-        print("\n" + "="*80)
-        print("SAVING RESULTS")
-        print("="*80)
+        print("Creating submission files...")
         
-        # Save results summary
-        results_summary = []
-        for model_name, result in self.results.items():
-            results_summary.append({
-                'Model': model_name,
-                'Avg_Score': result['avg_score'],
-                'Std_Score': result['std_score'],
-                'Min_Score': min(result['scores']),
-                'Max_Score': max(result['scores'])
+        for model_name, result in results.items():
+            predictions = result['predictions']
+            
+            # Create submission dataframe with correct format
+            expected_rows = 538150
+            
+            # Ensure we have the correct number of predictions
+            if len(predictions) != expected_rows:
+                print(f"WARNING: Expected {expected_rows} predictions, got {len(predictions)}")
+                if len(predictions) < expected_rows:
+                    # Pad with last prediction value
+                    padding = [predictions[-1]] * (expected_rows - len(predictions))
+                    predictions = np.concatenate([predictions, padding])
+                else:
+                    # Truncate to expected length
+                    predictions = predictions[:expected_rows]
+            
+            submission = pd.DataFrame({
+                'id': range(1, expected_rows + 1),  # IDs from 1 to 538150
+                'prediction': predictions
             })
-        
-        results_df = pd.DataFrame(results_summary)
-        results_df = results_df.sort_values('Avg_Score', ascending=False)
-        
-        # Save results
-        results_df.to_csv('/kaggle/working/results/linear_models_results.csv', index=False)
-        print("SUCCESS: Results summary saved")
-        
-        # Print results
-        print("\n" + "="*80)
-        print("LINEAR MODELS RESULTS")
-        print("="*80)
-        print(results_df.to_string(index=False))
-        
-        # Create submission files
-        for model_name, result in self.results.items():
-            self.create_submission_file(result['predictions'], model_name)
-        
-        # Memory optimization
-        gc.collect()
-        
-    def run_training(self):
-        """Run complete linear models training pipeline."""
-        print("="*80)
-        print("LINEAR MODELS TRAINING PIPELINE")
-        print("="*80)
-        
-        # Load and prepare data
-        self.load_data()
-        self.prepare_data()
-        
-        # Get feature columns
-        feature_cols = [col for col in self.X_train.columns if col != 'label']
-        
-        # Train models
-        print("\n" + "="*80)
-        print("TRAINING LINEAR MODELS")
-        print("="*80)
-        
-        # Linear Regression
-        self.train_linear_regression(self.X_train, self.y_train, feature_cols)
-        
-        # Ridge Regression
-        self.train_ridge_regression(self.X_train, self.y_train, feature_cols)
-        
-        # Lasso Regression
-        self.train_lasso_regression(self.X_train, self.y_train, feature_cols)
-        
-        # Save results
-        self.save_results()
-        
-        print("\n" + "="*80)
-        print("LINEAR MODELS TRAINING COMPLETED")
-        print("="*80)
+            
+            # Save to Kaggle working directory
+            output_path = f'/kaggle/working/{model_name}_submission.csv'
+            submission.to_csv(output_path, index=False)
+            
+            print(f"✅ {model_name} submission saved: {output_path}")
+            print(f"   Rows: {len(submission)} (expected: {expected_rows})")
+            print(f"   Mean: {submission['prediction'].mean():.6f}")
+            print(f"   Std: {submission['prediction'].std():.6f}")
+            print(f"   Min: {submission['prediction'].min():.6f}")
+            print(f"   Max: {submission['prediction'].max():.6f}")
+            
+            # Verify submission format
+            if len(submission) == expected_rows and submission['id'].min() == 1 and submission['id'].max() == expected_rows:
+                print(f"   ✅ Submission format is correct!")
+            else:
+                print(f"   ❌ Submission format error!")
 
 def main():
-    """Main function to run the training pipeline."""
-    trainer = LinearModelsTrainer()
-    trainer.run_training()
+    """Main execution function"""
+    print("="*80)
+    print("ULTRA-LIGHTWEIGHT LINEAR MODELS TRAINING")
+    print("="*80)
+    import pytz
+    pst = pytz.timezone('US/Pacific')
+    current_time = datetime.now(pst)
+    print(f"Date: {current_time.strftime('%Y-%m-%d %H:%M:%S')} PST")
+    print(f"Memory optimization: ENABLED")
+    print(f"GPU: DISABLED")
+    print("="*80)
+    
+    # Create trainer
+    trainer = UltraLightLinearModels()
+    
+    # Train models
+    results = trainer.train_models()
+    
+    # Create submissions
+    if results is not None:
+        trainer.create_submission(results)
+        print(f"\n🎯 Ready for submission!")
+    else:
+        print("\n❌ Training failed - no submission created")
+    
+    print("="*80)
+    print("COMPLETED")
 
 if __name__ == "__main__":
     main() 
